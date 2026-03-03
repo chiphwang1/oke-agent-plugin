@@ -79,7 +79,7 @@ oci_r() {
   "${timeout_prefix[@]}" oci --region "$region" "${profile_args[@]}" "$@"
 }
 
-# If cluster ref is OCID, use it directly. Otherwise search by name.
+# If cluster ref is OCID, use it directly. Otherwise require compartment to search by name.
 cluster_ocid=""
 cluster_name=""
 cluster_k8s=""
@@ -123,79 +123,14 @@ PY
     <<<"$cluster_json")
   fi
 else
-  # If a compartment is provided, search only there.
-  if [[ -n "$compartment_arg" ]]; then
-    hit=$(oci_r ce cluster list --compartment-id "$compartment_arg" --query "data[?name=='$cluster_ref']|[0]" --output json 2>/dev/null || true)
-    if [[ -n "$hit" && "$hit" != "null" ]]; then
-      cluster_ocid=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('id',''))
-PY
-      <<<"$hit")
-      cluster_name=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('name',''))
-PY
-      <<<"$hit")
-      cluster_k8s=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('kubernetes-version',''))
-PY
-      <<<"$hit")
-      compartment_ocid="$compartment_arg"
-    fi
-  else
-    if [[ -z "$config_tenancy" ]]; then
-      echo "tenancy not found in config; cannot search by name" >&2
-      exit 2
-    fi
-    echo "warning: no compartment provided; scanning all compartments" >&2
-    compartments_json=$(oci_r iam compartment list --compartment-id "$config_tenancy" --all \
-      --query 'data[?"lifecycle-state"==`ACTIVE`].{id:id,name:name}' --output json 2>/dev/null || true)
-    if [[ -z "$compartments_json" || "$compartments_json" == "[]" ]]; then
-      echo "no compartments found or access denied" >&2
-      exit 1
-    fi
+  # Require a compartment to search by name (avoid tenancy-wide scans).
+  if [[ -z "$compartment_arg" ]]; then
+    echo "compartment-id is required when using a cluster name; provide --compartment-id or use a cluster OCID" >&2
+    exit 2
+  fi
 
-    found=""
-    while read -r cid; do
-      if [[ -z "$cid" ]]; then
-        continue
-      fi
-      hit=$(oci_r ce cluster list --compartment-id "$cid" --query "data[?name=='$cluster_ref']|[0]" --output json 2>/dev/null || true)
-      if [[ -n "$hit" && "$hit" != "null" ]]; then
-        found="$hit"
-        compartment_ocid="$cid"
-        break
-      fi
-    done < <(python3 - <<'PY'
-import json,sys
-try:
-    data=json.loads(sys.stdin.read())
-except Exception:
-    data=[]
-for c in data:
-    print(c.get('id',''))
-PY
-    <<<"$compartments_json")
-
-    if [[ -z "$found" ]]; then
-      echo "cluster not found by name: $cluster_ref" >&2
-      exit 1
-    fi
-
+  hit=$(oci_r ce cluster list --compartment-id "$compartment_arg" --query "data[?name=='$cluster_ref']|[0]" --output json 2>/dev/null || true)
+  if [[ -n "$hit" && "$hit" != "null" ]]; then
     cluster_ocid=$(python3 - <<'PY'
 import json,sys
 try:
@@ -204,8 +139,7 @@ except Exception:
     d={}
 print(d.get('id',''))
 PY
-    <<<"$found")
-
+    <<<"$hit")
     cluster_name=$(python3 - <<'PY'
 import json,sys
 try:
@@ -214,8 +148,7 @@ except Exception:
     d={}
 print(d.get('name',''))
 PY
-    <<<"$found")
-
+    <<<"$hit")
     cluster_k8s=$(python3 - <<'PY'
 import json,sys
 try:
@@ -224,7 +157,8 @@ except Exception:
     d={}
 print(d.get('kubernetes-version',''))
 PY
-    <<<"$found")
+    <<<"$hit")
+    compartment_ocid="$compartment_arg"
   fi
 fi
 
