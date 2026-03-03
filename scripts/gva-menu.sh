@@ -456,6 +456,11 @@ if [[ "${add_optional,,}" == "y" || "${add_optional,,}" == "yes" ]]; then
   if [[ -n "$node_metadata" ]]; then
     optional_lines+="  --node-metadata '$node_metadata' \\\\\n"
   fi
+
+  ssh_key=$(ask "  --ssh-public-key (string or file://path, optional): ")
+  if [[ -n "$ssh_key" ]]; then
+    optional_lines+="  --ssh-public-key '$ssh_key' \\\\\n"
+  fi
 fi
 
 say ""
