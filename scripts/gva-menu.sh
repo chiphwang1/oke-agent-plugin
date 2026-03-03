@@ -414,6 +414,50 @@ if [[ "$type_is_flex" == "yes" ]]; then
   shape_config="{\"ocpus\":$ocpus,\"memoryInGBs\":$mem_gb}"
 fi
 
+optional_lines=""
+add_optional=$(ask "Add optional node-pool parameters? (y/N): ")
+if [[ "${add_optional,,}" == "y" || "${add_optional,,}" == "yes" ]]; then
+  defined_tags=$(ask "  --defined-tags (JSON or file://path, optional): ")
+  if [[ -n "$defined_tags" ]]; then
+    optional_lines+="  --defined-tags '$defined_tags' \\\\\n"
+  fi
+
+  freeform_tags=$(ask "  --freeform-tags (JSON or file://path, optional): ")
+  if [[ -n "$freeform_tags" ]]; then
+    optional_lines+="  --freeform-tags '$freeform_tags' \\\\\n"
+  fi
+
+  initial_labels=$(ask "  --initial-node-labels (JSON or file://path, optional): ")
+  if [[ -n "$initial_labels" ]]; then
+    optional_lines+="  --initial-node-labels '$initial_labels' \\\\\n"
+  fi
+
+  max_pods=$(ask "  --max-pods-per-node (integer, optional): ")
+  if [[ -n "$max_pods" ]]; then
+    optional_lines+="  --max-pods-per-node $max_pods \\\\\n"
+  fi
+
+  pv_encrypt=$(ask "  --is-pv-encryption-in-transit-enabled? (y/N): ")
+  if [[ "${pv_encrypt,,}" == "y" || "${pv_encrypt,,}" == "yes" ]]; then
+    optional_lines+="  --is-pv-encryption-in-transit-enabled true \\\\\n"
+  fi
+
+  kms_key=$(ask "  --kms-key-id (OCID, optional): ")
+  if [[ -n "$kms_key" ]]; then
+    optional_lines+="  --kms-key-id '$kms_key' \\\\\n"
+  fi
+
+  boot_size=$(ask "  --node-boot-volume-size-in-gbs (integer, optional): ")
+  if [[ -n "$boot_size" ]]; then
+    optional_lines+="  --node-boot-volume-size-in-gbs $boot_size \\\\\n"
+  fi
+
+  node_metadata=$(ask "  --node-metadata (JSON or file://path, optional): ")
+  if [[ -n "$node_metadata" ]]; then
+    optional_lines+="  --node-metadata '$node_metadata' \\\\\n"
+  fi
+fi
+
 say ""
 say "Summary:"
 say "- Cluster: $cluster_name"
@@ -463,7 +507,8 @@ oci ce node-pool create \
   --cni-type OCI_VCN_IP_NATIVE \
   --placement-configs '[{"availabilityDomain":"$ad","subnetId":"$primary_subnet"}]' \
   --node-source-details '{"sourceType":"IMAGE","imageId":"$image_ocid"}' \
-  --secondary-vnics '$secondary_vnics_json'
+  --secondary-vnics '$secondary_vnics_json' \
+${optional_lines%\\}
 CMD
 )
 
