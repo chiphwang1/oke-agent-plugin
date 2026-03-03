@@ -16,24 +16,40 @@ Subagents:
 
 Scripts rely on the global error contract: exit 0 success, exit 1 expected issues, exit 2 unexpected. Emit JSON errors on stderr in failure scenarios.
 
+Helper scripts:
+- `../../scripts/oke-discover.sh` — resolve cluster OCID from kubeconfig and fetch compartment/region via OCI CLI
+
 ---
 
 ## Phase 0 — Input & Preflight
 1. **Parse Arguments**  
    - `$ARGUMENTS` holds an optional symptom string. If empty, ask the user for a concise description (e.g., `"pods stuck Pending in prod namespace"`).  
    - Extract namespace hints (`-n`, `namespace:`) and resource names when present.
-2. **Confirm Context**  
-   - Ask for missing essentials: namespace, compartment OCID, cluster name (if multiple clusters), target Deployment/Service name, desired time window (`15m`, `1h`, default `1h`), impact level (prod/non-prod).
-3. **Tool Availability Checks**  
+2. **Auto-Discover Cluster Context**  
+   - Ask for **cluster name** if not provided.
+   - Resolve **cluster OCID** from `~/.kube/config` when possible.
+   - Pull region/tenancy defaults from `/Users/chipinghwang/.oci/config`.
+   - Run:
+     ```bash
+     bash ../../scripts/oke-discover.sh --cluster <cluster-name-or-ocid> [--region <region>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>]
+     ```
+   - Use the JSON output to auto-populate: `cluster_ocid`, `compartment_ocid`, `region`, `kubernetes_version`.
+   - Prompt only for fields that remain missing after discovery.
+3. **Confirm Context**  
+   - Ask for missing essentials: namespace, target Deployment/Service name, desired time window (`15m`, `1h`, default `1h`), impact level (prod/non-prod).
+4. **Tool Availability Checks**  
    - Run `kubectl version --client` and `oci --version`.  
    - Record `KUBECTL_AVAILABLE`/`OCI_AVAILABLE` booleans. If a CLI is missing, inform the user that evidence will be partial and continue with available tools.
-4. **Session State**  
+5. **Session State**  
    - Initialize state structure:
      ```json
      {
        "symptom": "...",
        "namespace": "...",
        "time_window": "1h",
+       "cluster_ocid": "...",
+       "compartment_ocid": "...",
+       "region": "...",
        "domains": [],
        "fallbacks": {"kubectl": false, "oci": false},
        "evidence": []
