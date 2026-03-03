@@ -1,8 +1,6 @@
 ---
 name: oke-cluster-generator
 description: Use this skill when the user asks to build, generate, create, design, or scaffold an OKE (Oracle Kubernetes Engine) Terraform stack, OCI Kubernetes infrastructure, ORM schema, or Resource Manager template. Trigger phrases include "build an OKE stack", "create OKE Terraform", "generate ORM schema", "deploy OKE cluster", "OKE infrastructure", "terraform-oci-oke", or any request to design OCI Kubernetes infrastructure with Terraform. Part of the oke-agent-plugin.
-argument-hint: "[workload-type] [region] [cluster-name]"
-disable-model-invocation: true
 ---
 
 ## Plugin Context

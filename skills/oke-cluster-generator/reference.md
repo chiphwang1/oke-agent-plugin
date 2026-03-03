@@ -4,6 +4,11 @@ This file contains static fallback lists and the authoritative variable mapping 
 Read this file during the questionnaire when a CLI call fails, and at the start of Phase 3
 code generation to ensure correct `terraform-oci-oke` module variable names.
 
+## Contents
+- Static Kubernetes Versions
+- Static OKE Managed Add-ons
+- Variable Mapping: User Selection → terraform-oci-oke Module Variables
+
 ---
 
 ## Static Kubernetes Versions

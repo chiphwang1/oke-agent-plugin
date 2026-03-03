@@ -3,6 +3,13 @@
 Use these structures and patterns during Phase 3 when generating `schema.yaml`.
 Apply audience filtering rules from Domain 7 to decide which variable groups to surface.
 
+## Contents
+- schema.yaml Top-Level Structure
+- Audience Filtering (from Domain 7)
+- Conditional Visibility Patterns
+- Input Validation Patterns
+- Per-Variable Schema Entry Example
+
 ---
 
 ## schema.yaml Top-Level Structure

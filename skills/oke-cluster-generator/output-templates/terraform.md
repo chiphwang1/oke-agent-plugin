@@ -5,6 +5,11 @@ bindings from the user's answers using the mapping table in `reference.md`.
 Never leave `# ...` placeholder comments or stub values that would cause `terraform plan`
 to fail.
 
+## Contents
+- provider.tf
+- main.tf — Module Call
+- outputs.tf
+
 ---
 
 ## provider.tf
