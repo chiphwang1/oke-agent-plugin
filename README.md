@@ -8,6 +8,7 @@ Fills the gap in AI-assisted Kubernetes tooling: OKE currently has no equivalent
 **Implementation Notes:**
 - `skills/oke-cluster-generator/implementation.md`
 - `implementation.md` (Skill 2 — `/oke-troubleshooter`)
+- `skills/oke-gva-deployer/implementation.md`
 
 ### `/oke-agent-plugin:oke-cluster-generator`
 
@@ -64,6 +65,27 @@ Performs end-to-end diagnosis of OKE incidents by correlating Kubernetes symptom
 /oke-agent-plugin:oke-troubleshooter "service payments-lb has no IP us-phoenix-1"
 ```
 
+### `/oke-agent-plugin:oke-gva-deployer`
+
+Deploys OKE node pools configured with Generic VNIC Attachment (GVA), including secondary VNIC profiles, Application Resource labels, and validation guidance.
+
+**Highlights:**
+- Auto-discovers cluster context from kubeconfig and OCI config
+- Lists VCNs and subnets for selection
+- Lists OKE images for the cluster’s Kubernetes version
+- Generates a ready-to-run `oci ce node-pool create` command
+- Provides a test Deployment manifest for GVA validation
+
+**Prerequisites:**
+- OCI CLI installed and configured
+- `kubectl` configured for the target cluster
+
+**Usage:**
+
+```bash
+/oke-agent-plugin:oke-gva-deployer
+```
+
 ## Project Structure
 
 ```
@@ -85,11 +107,20 @@ oke-agent-plugin/
 │       ├── SKILL.md                        # 5-phase troubleshooting workflow
 │       ├── symptom-triage.md               # Symptom → domain decision table
 │       └── evidence-collectors.md          # Command recipes per diagnostic domain
+│   └── oke-gva-deployer/
+│       ├── SKILL.md                        # GVA node pool workflow
+│       ├── USAGE.md                        # How to use the GVA skill and scripts
+│       ├── implementation.md               # Skill implementation notes
+│       └── references/
+│           └── gva.md                       # Feature summary and constraints
 ├── shared/
 │   └── oci-resource-map.md                 # K8s-to-OCI mapping helper commands
 └── scripts/
     ├── preflight-check.sh                  # OCI CLI auth + tenancy + region + compartment discovery
     └── validate-cidr.sh                    # CIDR overlap detection (VCN / Pod / Service CIDRs)
+    ├── gva-menu.sh                          # Interactive GVA node-pool builder
+    ├── gva-discover.sh                      # GVA discovery helper (cluster/VCN/subnet/NSG)
+    └── oke-discover.sh                      # Troubleshooter cluster discovery helper
 ```
 
 ## Installation
