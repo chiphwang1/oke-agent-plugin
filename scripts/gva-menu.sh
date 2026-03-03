@@ -112,6 +112,7 @@ if [[ "$oci_available" == "yes" ]]; then
 fi
 
 cluster_k8s=""
+vcn_lines=()
 subnet_lines=()
 nsg_lines=()
 
@@ -192,6 +193,52 @@ if [[ -z "$compartment_ocid" ]]; then
 fi
 
 ad=$(ask "Availability Domain (e.g., GrCh:US-ASHBURN-AD-1): ")
+
+vcn_id=""
+if [[ "$oci_available" == "yes" && -n "$compartment_ocid" ]]; then
+  vcn_json=$(oci network vcn list --compartment-id "$compartment_ocid" --region "$region" --query 'data[*].{name:"display-name",id:id,cidr:"cidr-block"}' --output json 2>/dev/null || true)
+  if [[ -n "$vcn_json" && "$vcn_json" != "[]" ]]; then
+    mapfile -t vcn_lines < <(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+for v in d if isinstance(d, list) else []:
+    name=v.get('name') or ''
+    vid=v.get('id') or ''
+    cidr=v.get('cidr') or ''
+    if name and vid:
+        print(f"{name} | {cidr} | {vid}")
+PY
+    <<<"$vcn_json")
+  fi
+fi
+
+if [[ ${#vcn_lines[@]} -gt 0 ]]; then
+  selection=$(select_from_list "Select VCN:" "${vcn_lines[@]}")
+  if [[ -n "$selection" ]]; then
+    vcn_id=$(printf "%s" "$selection" | cut -d'|' -f3 | xargs)
+    subnet_lines=()
+    subnet_json=$(oci network subnet list --compartment-id "$compartment_ocid" --vcn-id "$vcn_id" --region "$region" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json 2>/dev/null || true)
+    if [[ -n "$subnet_json" && "$subnet_json" != "[]" ]]; then
+      mapfile -t subnet_lines < <(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+for s in d.get('data', d) if isinstance(d, dict) else d:
+    name=s.get('name') or s.get('display-name') or ''
+    sid=s.get('id') or ''
+    cidr=s.get('cidr') or s.get('cidr-block') or ''
+    if name and sid:
+        print(f"{name} | {cidr} | {sid}")
+PY
+      <<<"$subnet_json")
+    fi
+  fi
+fi
 
 primary_subnet=""
 if [[ ${#subnet_lines[@]} -gt 0 ]]; then
