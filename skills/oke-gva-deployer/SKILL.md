@@ -17,17 +17,12 @@ Scripts:
 ---
 
 ## Phase 0 — Intake
-Pull as much as possible from the cluster and tenancy using OCI CLI before asking the user.
-Only ask for details that cannot be discovered.
-
-Minimum required inputs if discovery is unavailable:
-- Cluster identifier (OCID or name) and region
-- Compartment OCID
-- Availability Domain
-- Primary subnet OCID (node placement)
-- Node pool shape and size
-- Image OCID
-- VNIC profiles (applicationResource, subnetId, ipCount, nsgIds)
+Flow requirements:
+1) User enters the **cluster name** (or OCID).
+2) Resolve **cluster OCID** from `~/.kube/config` when possible.
+3) Resolve **tenancy/region defaults** from `/Users/chipinghwang/.oci/config`.
+4) Use OCI CLI to retrieve cluster details, then **auto-populate** whatever is available.
+5) Prompt only for missing information.
 
 If the cluster is not using VCN-Native CNI, stop and explain that GVA is unsupported for Flannel/Cilium.
 
@@ -37,7 +32,7 @@ If the cluster is not using VCN-Native CNI, stop and explain that GVA is unsuppo
 When OCI CLI is available and authenticated, run:
 
 ```bash
-bash ../../scripts/gva-discover.sh --cluster <cluster-name-or-ocid> [--region <region>] [--compartment-id <ocid>] [--profile <oci-profile>] [--timeout <seconds>]
+bash ../../scripts/gva-discover.sh --cluster <cluster-name-or-ocid> [--region <region>] [--compartment-id <ocid>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>]
 ```
 
 Use the JSON output to populate:
@@ -57,9 +52,12 @@ bash ../../scripts/gva-menu.sh
 ```
 
 This script:
-- Auto-discovers cluster context when possible
+- Uses cluster name input
+- Pulls cluster OCID from kubeconfig when possible
+- Uses tenancy/region defaults from `/Users/chipinghwang/.oci/config`
+- Auto-discovers cluster details via OCI CLI
 - Presents lists for subnets and NSGs
-- Prompts only for user-chosen values
+- Prompts only for missing values
 - Shows a summary and confirmation step
 - Prints a ready-to-run CLI command
 - Prints a test Deployment manifest

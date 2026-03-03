@@ -66,12 +66,17 @@ if command -v timeout >/dev/null 2>&1; then
   have_timeout="yes"
 fi
 
-timeout_prefix=()
-if [[ -n "$timeout_arg" && "$have_timeout" == "yes" ]]; then
-  timeout_prefix=(timeout "$timeout_arg")
+use_py_timeout="no"
+declare -a timeout_prefix=()
+if [[ -n "$timeout_arg" ]]; then
+  if [[ "$have_timeout" == "yes" ]]; then
+    timeout_prefix=(timeout "$timeout_arg")
+  else
+    use_py_timeout="yes"
+  fi
 fi
 
-profile_args=()
+declare -a profile_args=()
 if [[ -n "$profile_arg" ]]; then
   profile_args=(--profile "$profile_arg")
 elif [[ -n "${OCI_CLI_PROFILE:-}" ]]; then
@@ -79,7 +84,75 @@ elif [[ -n "${OCI_CLI_PROFILE:-}" ]]; then
 fi
 
 oci_r() {
-  "${timeout_prefix[@]}" oci --region "$region" "${profile_args[@]}" "$@"
+  local -a cmd
+  cmd=(oci --region "$region")
+  if [[ ${#profile_args[@]} -gt 0 ]]; then
+    cmd+=("${profile_args[@]}")
+  fi
+  cmd+=("$@")
+  if [[ ${#timeout_prefix[@]} -gt 0 ]]; then
+    cmd=("${timeout_prefix[@]}" "${cmd[@]}")
+  fi
+  if [[ "$use_py_timeout" == "yes" ]]; then
+    python3 - "$timeout_arg" "${cmd[@]}" <<'PY'
+import subprocess, sys
+timeout = float(sys.argv[1])
+cmd = sys.argv[2:]
+try:
+    p = subprocess.run(cmd, timeout=timeout)
+    sys.exit(p.returncode)
+except subprocess.TimeoutExpired:
+    sys.exit(124)
+PY
+  else
+    "${cmd[@]}"
+  fi
+}
+
+oci_json() {
+  local out err rc
+  local -a cmd
+  err="$(mktemp)"
+  cmd=(oci --region "$region")
+  if [[ ${#profile_args[@]} -gt 0 ]]; then
+    cmd+=("${profile_args[@]}")
+  fi
+  cmd+=("$@")
+  if [[ ${#timeout_prefix[@]} -gt 0 ]]; then
+    cmd=("${timeout_prefix[@]}" "${cmd[@]}")
+  fi
+  if [[ "$use_py_timeout" == "yes" ]]; then
+    out="$(python3 - "$timeout_arg" "$err" "${cmd[@]}" <<'PY'
+import subprocess, sys
+timeout = float(sys.argv[1])
+err_path = sys.argv[2]
+cmd = sys.argv[3:]
+try:
+    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, text=True)
+    if p.stderr:
+        with open(err_path, "w") as f:
+            f.write(p.stderr)
+    sys.stdout.write(p.stdout or "")
+    sys.exit(p.returncode)
+except subprocess.TimeoutExpired:
+    with open(err_path, "w") as f:
+        f.write("Command timed out after %ss\\n" % timeout)
+    sys.exit(124)
+PY
+)"
+    rc=$?
+  else
+    out="$("${cmd[@]}" 2>"$err")"
+    rc=$?
+  fi
+  if [[ $rc -ne 0 ]]; then
+    echo "error: oci $* failed (exit $rc)" >&2
+    sed -e 's/^/oci stderr: /' "$err" >&2
+    rm -f "$err"
+    return "$rc"
+  fi
+  rm -f "$err"
+  printf "%s" "$out"
 }
 
 # If cluster ref is OCID, use it directly. Otherwise require compartment to search by name.
@@ -95,8 +168,10 @@ fi
 
 if [[ "$is_ocid" == "yes" ]]; then
   cluster_ocid="$cluster_ref"
-  cluster_json=$(oci_r ce cluster get --cluster-id "$cluster_ocid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id"}' --output json 2>/dev/null || true)
-  if [[ -n "$cluster_json" && "$cluster_json" != "{}" ]]; then
+  cluster_json=$(oci_json ce cluster get --cluster-id "$cluster_ocid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id"}' --output json || true)
+  if [[ -z "$cluster_json" || "$cluster_json" == "{}" ]]; then
+    echo "warning: failed to fetch cluster details for $cluster_ocid (check auth/region/profile)" >&2
+  else
     cluster_name=$(python3 - <<'PY'
 import json,sys
 try:
@@ -130,7 +205,7 @@ else
   if [[ -z "$compartment_arg" ]]; then
     kubeconfig_path="${kubeconfig_arg:-$HOME/.kube/config}"
     if [[ -f "$kubeconfig_path" ]]; then
-      kube_cluster_id=$(python3 - <<'PY'
+      kube_cluster_id=$(python3 - "$kubeconfig_path" "$cluster_ref" <<'PY'
 import sys, yaml
 from pathlib import Path
 
@@ -165,17 +240,80 @@ try:
 except Exception:
     print("")
 PY
-      "$kubeconfig_path" "$cluster_ref")
+      )
       if [[ -n "$kube_cluster_id" ]]; then
         cluster_ocid="$kube_cluster_id"
         is_ocid="yes"
+      else
+        # Fallback: iterate all cluster-ids in kubeconfig and match by name via oci ce cluster get
+        mapfile -t kube_cluster_ids < <(python3 - "$kubeconfig_path" <<'PY'
+import yaml, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+try:
+    data = yaml.safe_load(path.read_text())
+except Exception:
+    sys.exit(0)
+users = {u.get("name"): u.get("user", {}) for u in (data.get("users", []) or [])}
+ids = []
+for u in users.values():
+    exec_cfg = u.get("exec", {})
+    args = exec_cfg.get("args", []) if isinstance(exec_cfg, dict) else []
+    for i, a in enumerate(args):
+        if a == "--cluster-id" and i + 1 < len(args):
+            ids.append(args[i + 1])
+print("\\n".join(sorted(set(ids))))
+PY
+        )
+        if [[ ${#kube_cluster_ids[@]} -gt 0 ]]; then
+          for cid in "${kube_cluster_ids[@]}"; do
+            match_json=$(oci_json ce cluster get --cluster-id "$cid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id"}' --output json || true)
+            if [[ -n "$match_json" && "$match_json" != "{}" ]]; then
+              match_name=$(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+print(d.get('name',''))
+PY
+              <<<"$match_json")
+              if [[ "$match_name" == "$cluster_ref" ]]; then
+                cluster_ocid="$cid"
+                cluster_name="$match_name"
+                cluster_k8s=$(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+print(d.get('k8s',''))
+PY
+                <<<"$match_json")
+                compartment_ocid=$(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+print(d.get('compartment',''))
+PY
+                <<<"$match_json")
+                is_ocid="yes"
+                break
+              fi
+            fi
+          done
+        fi
       fi
     fi
   fi
 
   if [[ "$is_ocid" == "yes" ]]; then
-    cluster_json=$(oci_r ce cluster get --cluster-id "$cluster_ocid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id"}' --output json 2>/dev/null || true)
-    if [[ -n "$cluster_json" && "$cluster_json" != "{}" ]]; then
+    cluster_json=$(oci_json ce cluster get --cluster-id "$cluster_ocid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id"}' --output json || true)
+    if [[ -z "$cluster_json" || "$cluster_json" == "{}" ]]; then
+      echo "warning: failed to fetch cluster details for $cluster_ocid (check auth/region/profile)" >&2
+    else
       cluster_name=$(python3 - <<'PY'
 import json,sys
 try:
@@ -207,13 +345,13 @@ PY
   fi
 
   # Require a compartment to search by name (avoid tenancy-wide scans).
-  if [[ -z "$compartment_arg" && -z "$compartment_ocid" ]]; then
+  if [[ -z "$compartment_arg" && -z "$compartment_ocid" && "$is_ocid" != "yes" ]]; then
     echo "compartment-id is required when using a cluster name; provide --compartment-id, a cluster OCID, or a kubeconfig with cluster-id" >&2
     exit 2
   fi
 
   comp_to_search="${compartment_arg:-$compartment_ocid}"
-  hit=$(oci_r ce cluster list --compartment-id "$comp_to_search" --query "data[?name=='$cluster_ref']|[0]" --output json 2>/dev/null || true)
+  hit=$(oci_json ce cluster list --compartment-id "$comp_to_search" --query "data[?name=='$cluster_ref']|[0]" --output json || true)
   if [[ -n "$hit" && "$hit" != "null" ]]; then
     cluster_ocid=$(python3 - <<'PY'
 import json,sys
@@ -254,8 +392,16 @@ fi
 subnets_json="[]"
 nsGs_json="[]"
 if [[ -n "$compartment_ocid" ]]; then
-  subnets_json=$(oci_r network subnet list --compartment-id "$compartment_ocid" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json 2>/dev/null || true)
-  nsGs_json=$(oci_r network nsg list --compartment-id "$compartment_ocid" --query 'data[*].{"name":"display-name","id":"id"}' --output json 2>/dev/null || true)
+  subnets_json=$(oci_json network subnet list --compartment-id "$compartment_ocid" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json || true)
+  if [[ -z "$subnets_json" ]]; then
+    subnets_json="[]"
+    echo "warning: failed to list subnets for compartment $compartment_ocid" >&2
+  fi
+  nsGs_json=$(oci_json network nsg list --compartment-id "$compartment_ocid" --query 'data[*].{"name":"display-name","id":"id"}' --output json || true)
+  if [[ -z "$nsGs_json" ]]; then
+    nsGs_json="[]"
+    echo "warning: failed to list NSGs for compartment $compartment_ocid" >&2
+  fi
 fi
 
 # Output consolidated JSON

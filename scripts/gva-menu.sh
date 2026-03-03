@@ -37,42 +37,85 @@ if [[ -z "$cluster_name" ]]; then
   cluster_name="cluster3"
 fi
 
-profile_name=$(ask "OCI CLI profile (optional): ")
-region=$(ask "Region (optional, press Enter to auto): ")
-compartment_ocid=$(ask "Compartment OCID (optional): ")
+# Pull defaults from OCI config
+config_file="$HOME/.oci/config"
+config_region=""
+config_tenancy=""
+if [[ -f "$config_file" ]]; then
+  config_region=$(awk -F= '/^region=/{print $2; exit}' "$config_file" | tr -d ' ')
+  config_tenancy=$(awk -F= '/^tenancy=/{print $2; exit}' "$config_file" | tr -d ' ')
+fi
 
+region=$(ask "Region (default: ${config_region:-none}): ")
+if [[ -z "$region" && -n "$config_region" ]]; then
+  region="$config_region"
+fi
+
+profile_name=$(ask "OCI CLI profile (optional): ")
+
+# Try to resolve cluster OCID from kubeconfig
+kubeconfig_path="$HOME/.kube/config"
+cluster_ocid=""
+if [[ -f "$kubeconfig_path" ]]; then
+  cluster_ocid=$(python3 - "$kubeconfig_path" "$cluster_name" <<'PY'
+import sys, yaml
+from pathlib import Path
+path = Path(sys.argv[1])
+name = sys.argv[2]
+try:
+    data = yaml.safe_load(path.read_text())
+except Exception:
+    print("")
+    raise SystemExit(0)
+
+contexts = data.get("contexts", []) or []
+users = {u.get("name"): u.get("user", {}) for u in (data.get("users", []) or [])}
+
+match_user = None
+for c in contexts:
+    cname = c.get("name", "")
+    if name in cname:
+        match_user = (c.get("context", {}) or {}).get("user")
+        if match_user:
+            break
+
+if not match_user:
+    print("")
+    raise SystemExit(0)
+
+exec_cfg = users.get(match_user, {}).get("exec", {})
+args = exec_cfg.get("args", []) if isinstance(exec_cfg, dict) else []
+try:
+    idx = args.index("--cluster-id")
+    print(args[idx + 1])
+except Exception:
+    print("")
+PY
+  )
+fi
+
+if [[ -z "$cluster_ocid" ]]; then
+  cluster_ocid=$(ask "Cluster OCID (not found in kubeconfig): ")
+fi
+
+compartment_ocid=""
 discovery_json=""
 if [[ "$oci_available" == "yes" ]]; then
-  discover_cmd=(./scripts/gva-discover.sh --cluster "$cluster_name" --timeout 10)
+  discover_cmd=(./scripts/gva-discover.sh --cluster "$cluster_ocid" --timeout 10)
   if [[ -n "$region" ]]; then
     discover_cmd+=(--region "$region")
-  fi
-  if [[ -n "$compartment_ocid" ]]; then
-    discover_cmd+=(--compartment-id "$compartment_ocid")
   fi
   if [[ -n "$profile_name" ]]; then
     discover_cmd+=(--profile "$profile_name")
   fi
-
   discovery_json=$("${discover_cmd[@]}" 2>/dev/null || true)
 fi
 
-cluster_ocid=""
 cluster_k8s=""
 subnet_lines=()
 nsg_lines=()
 
 if [[ -n "$discovery_json" ]]; then
-  cluster_ocid=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('cluster',{}).get('id',''))
-PY
-  <<<"$discovery_json")
-
   cluster_k8s=$(python3 - <<'PY'
 import json,sys
 try:
@@ -138,10 +181,6 @@ for n in d.get('nsgs',[]):
         print(f"{name} | {nid}")
 PY
   <<<"$discovery_json")
-fi
-
-if [[ -z "$cluster_ocid" ]]; then
-  cluster_ocid=$(ask "Cluster OCID: ")
 fi
 
 if [[ -z "$region" ]]; then
