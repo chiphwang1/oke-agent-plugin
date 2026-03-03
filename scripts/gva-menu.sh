@@ -24,6 +24,14 @@ select_from_list() {
   printf "%s" "$choice"
 }
 
+normalize_none() {
+  local v="$1"
+  case "${v,,}" in
+    ""|"0"|"none"|"no"|"n"|"skip") echo "" ;;
+    *) echo "$v" ;;
+  esac
+}
+
 oci_available="yes"
 if ! command -v oci >/dev/null 2>&1; then
   oci_available="no"
@@ -96,6 +104,8 @@ fi
 
 if [[ -z "$cluster_ocid" ]]; then
   cluster_ocid=$(ask "Cluster OCID (not found in kubeconfig): ")
+else
+  say "Detected cluster OCID from kubeconfig."
 fi
 
 compartment_ocid=""
@@ -112,7 +122,6 @@ if [[ "$oci_available" == "yes" ]]; then
 fi
 
 cluster_k8s=""
-vcn_lines=()
 subnet_lines=()
 nsg_lines=()
 
@@ -215,14 +224,21 @@ PY
   fi
 fi
 
-if [[ ${#vcn_lines[@]} -gt 0 ]]; then
+if [[ ${#vcn_lines[@]} -eq 1 ]]; then
+  vcn_id=$(printf "%s" "${vcn_lines[0]}" | cut -d'|' -f3 | xargs)
+  say "Auto-selected VCN: ${vcn_lines[0]}"
+elif [[ ${#vcn_lines[@]} -gt 0 ]]; then
   selection=$(select_from_list "Select VCN:" "${vcn_lines[@]}")
   if [[ -n "$selection" ]]; then
     vcn_id=$(printf "%s" "$selection" | cut -d'|' -f3 | xargs)
-    subnet_lines=()
-    subnet_json=$(oci network subnet list --compartment-id "$compartment_ocid" --vcn-id "$vcn_id" --region "$region" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json 2>/dev/null || true)
-    if [[ -n "$subnet_json" && "$subnet_json" != "[]" ]]; then
-      mapfile -t subnet_lines < <(python3 - <<'PY'
+  fi
+fi
+
+if [[ -n "$vcn_id" ]]; then
+  subnet_lines=()
+  subnet_json=$(oci network subnet list --compartment-id "$compartment_ocid" --vcn-id "$vcn_id" --region "$region" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json 2>/dev/null || true)
+  if [[ -n "$subnet_json" && "$subnet_json" != "[]" ]]; then
+    mapfile -t subnet_lines < <(python3 - <<'PY'
 import json,sys
 try:
     d=json.loads(sys.stdin.read())
@@ -235,8 +251,7 @@ for s in d.get('data', d) if isinstance(d, dict) else d:
     if name and sid:
         print(f"{name} | {cidr} | {sid}")
 PY
-      <<<"$subnet_json")
-    fi
+    <<<"$subnet_json")
   fi
 fi
 
@@ -278,7 +293,36 @@ if [[ "$type_is_flex" == "yes" ]]; then
 fi
 
 node_count=$(ask "Node count: ")
-image_ocid=$(ask "Image OCID: ")
+
+# Image selection: list images for k8s version and prompt
+image_ocid=""
+if [[ "$oci_available" == "yes" && -n "$k8s_version" ]]; then
+  img_json=$(oci ce node-pool-options get --node-pool-option-id all --region "$region" --query 'data.sources[*].{"image":"image-id","name":"source-name"}' --output json 2>/dev/null || true)
+  if [[ -n "$img_json" && "$img_json" != "[]" ]]; then
+    mapfile -t img_lines < <(python3 - <<'PY'
+import json,sys,re
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d=[]
+pattern=re.compile(rf'OKE-{re.escape(sys.argv[1])}')
+items=[x for x in d if pattern.search(x.get('name',''))]
+for x in items:
+    print(f"{x.get('name')} | {x.get('image')}")
+PY
+    <<<"$img_json" "$k8s_version")
+    if [[ ${#img_lines[@]} -gt 0 ]]; then
+      selection=$(select_from_list "Select OKE image for $k8s_version:" "${img_lines[@]}")
+      if [[ -n "$selection" ]]; then
+        image_ocid=$(printf "%s" "$selection" | cut -d'|' -f2 | xargs)
+      fi
+    fi
+  fi
+fi
+
+if [[ -z "$image_ocid" ]]; then
+  image_ocid=$(ask "Image OCID: ")
+fi
 
 say ""
 say "CNI must be OCI_VCN_IP_NATIVE for GVA."
@@ -315,13 +359,10 @@ while true; do
 
   nsg_ids=""
   if [[ ${#nsg_lines[@]} -gt 0 ]]; then
-    selection=$(select_from_list "  Select NSG (or Manual entry):" "${nsg_lines[@]}")
-    if [[ -n "$selection" ]]; then
-      nsg_ids=$(printf "%s" "$selection" | cut -d'|' -f2 | xargs)
-    fi
-  fi
-  if [[ -z "$nsg_ids" ]]; then
-    nsg_ids=$(ask "  nsgIds (comma-separated OCIDs, optional): ")
+    selection=$(select_from_list "  Select NSG (or type none):" "${nsg_lines[@]}")
+    nsg_ids=$(normalize_none "$selection")
+  else
+    nsg_ids=$(normalize_none "$(ask "  nsgIds (comma-separated OCIDs, optional): ")")
   fi
 
   display_name=$(ask "  displayName (optional): ")
@@ -389,15 +430,28 @@ for p in "${profile_summaries[@]}"; do
   say "- VNIC: $p"
  done
 
-confirm=$(ask "Proceed to print CLI command? (y/N): ")
-if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+say ""
+say "Choose next action:"
+say "1) Run command now"
+say "2) Print command only"
+say "3) Exit without output"
+choice=$(ask "Select (1/2/3): ")
+
+if [[ "$choice" == "1" ]]; then
+  run_now="yes"
+elif [[ "$choice" == "2" ]]; then
+  run_now="no"
+elif [[ "$choice" == "3" ]]; then
   say "Aborted."
   exit 0
+else
+  say "Unknown choice; printing command only."
+  run_now="no"
 fi
 
 say ""
 say "Generated OCI CLI command:"
-cat <<CMD
+cmd_text=$(cat <<CMD
 oci ce node-pool create \
   --compartment-id "$compartment_ocid" \
   --cluster-id "$cluster_ocid" \
@@ -411,6 +465,15 @@ oci ce node-pool create \
   --node-source-details '{"sourceType":"IMAGE","imageId":"$image_ocid"}' \
   --secondary-vnics '$secondary_vnics_json'
 CMD
+)
+
+echo "$cmd_text"
+
+if [[ "$run_now" == "yes" ]]; then
+  say ""
+  say "Running command..."
+  eval "$cmd_text"
+fi
 
 say ""
 say "Sample test Deployment (replace ResourceName/image):"
@@ -445,6 +508,5 @@ YAML
 
 say ""
 say "Next steps:"
-say "1) Run the command above."
-say "2) Verify resources on a node: kubectl describe node <node_name>"
-say "3) Apply the test Deployment (with your chosen ResourceName)."
+say "1) Verify resources on a node: kubectl describe node <node_name>"
+say "2) Apply the test Deployment (with your chosen ResourceName)."
