@@ -65,7 +65,7 @@ Performs end-to-end diagnosis of OKE incidents by correlating Kubernetes symptom
 /oke-agent-plugin:oke-troubleshooter "service payments-lb has no IP us-phoenix-1"
 ```
 
-### `/oke-agent-plugin:oke-gva-deployer`
+### `/oke-agent-plugin:oke-LA-feature-gva-deployer`
 
 Deploys OKE node pools configured with Generic VNIC Attachment (GVA), including secondary VNIC profiles, Application Resource labels, and validation guidance.
 
@@ -83,7 +83,7 @@ Deploys OKE node pools configured with Generic VNIC Attachment (GVA), including 
 **Usage:**
 
 ```bash
-/oke-agent-plugin:oke-gva-deployer
+/oke-agent-plugin:oke-LA-feature-gva-deployer
 ```
 
 ## Project Structure
