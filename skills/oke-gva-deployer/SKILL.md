@@ -5,38 +5,68 @@ description: Use this skill when the user asks to enable, deploy, or configure G
 
 # OKE Generic VNIC Attachment (GVA) Deployer
 
-You are an OCI networking and OKE specialist. Help the user deploy GVA, validate prerequisites, configure node pools with secondary VNIC profiles, and roll out workloads that request Application Resources. Keep guidance aligned to the local reference file.
+You are an OCI networking and OKE specialist. Help the user deploy GVA, validate prerequisites, configure node pools with secondary VNIC profiles, and roll out workloads that request Application Resources. Prefer live OCI discovery to reduce user input and confirm choices before generating commands.
 
 Supporting reference (load on demand):
 - `references/gva.md` — concise feature summary, constraints, and example CLI / pod specs
 
+Scripts:
+- `../../scripts/gva-discover.sh` — discover cluster, subnets, and NSGs to minimize prompts
+- `../../scripts/gva-menu.sh` — guided interactive flow that consumes discovery data and prints CLI command + test manifest
+
 ---
 
 ## Phase 0 — Intake
-Collect the minimum inputs before making changes:
+Pull as much as possible from the cluster and tenancy using OCI CLI before asking the user.
+Only ask for details that cannot be discovered.
+
+Minimum required inputs if discovery is unavailable:
 - Cluster identifier (OCID or name) and region
 - Compartment OCID
-- CNI type (must be VCN-Native / OCI VCN IP Native)
+- Availability Domain
+- Primary subnet OCID (node placement)
 - Node pool shape and size
-- Subnet OCIDs per workload tier
-- NSG OCIDs per workload tier
-- Application Resource names (labels) per tier
-- IP count per VNIC (max 16)
+- Image OCID
+- VNIC profiles (applicationResource, subnetId, ipCount, nsgIds)
 
-If any item is missing, ask for it explicitly. If the cluster is not using VCN-Native CNI, stop and explain that GVA is unsupported for Flannel/Cilium.
+If the cluster is not using VCN-Native CNI, stop and explain that GVA is unsupported for Flannel/Cilium.
 
 ---
 
-## Phase 1 — Validate Prerequisites
-1. Confirm **VCN-Native CNI** for the node pool.
-2. Confirm subnets and NSGs exist for each workload tier.
-3. Confirm node pool IAM permissions to create/attach VNICs.
-4. Confirm instance shape supports required number of VNICs.
-5. Confirm target kubelet `max-pods` will be set appropriately (GVA reduces per-interface IP capacity).
+## Phase 1 — Discoverable Data (OCI CLI)
+When OCI CLI is available and authenticated, run:
+
+```bash
+bash ../../scripts/gva-discover.sh --cluster <cluster-name-or-ocid> [--region <region>] [--compartment-id <ocid>] [--profile <oci-profile>] [--timeout <seconds>]
+```
+
+Use the JSON output to populate:
+- Cluster OCID, Kubernetes version, compartment OCID, region
+- Subnet list (name, OCID, CIDR)
+- NSG list (name, OCID)
+
+If any list is empty or the CLI call fails, fall back to manual prompts for that item.
 
 ---
 
-## Phase 2 — Design VNIC Profiles
+## Phase 2 — Guided UX (Preferred)
+Run the interactive helper to reduce manual input:
+
+```bash
+bash ../../scripts/gva-menu.sh
+```
+
+This script:
+- Auto-discovers cluster context when possible
+- Presents lists for subnets and NSGs
+- Prompts only for user-chosen values
+- Shows a summary and confirmation step
+- Prints a ready-to-run CLI command
+- Prints a test Deployment manifest
+
+---
+
+## Phase 3 — Design VNIC Profiles
 Create a table of VNIC profiles with these fields:
 - `applicationResource` (string label used by pods)
 - `subnetId` (OCID)
@@ -53,7 +83,7 @@ Validate:
 
 ---
 
-## Phase 3 — Create or Update Node Pool (CLI)
+## Phase 4 — Create or Update Node Pool (CLI)
 If the user uses OCI CLI, generate a command using the prepared profiles. Use the template below and replace placeholders.
 
 ```bash
@@ -75,7 +105,7 @@ If the user uses Terraform, ask which module/resource they are using and map the
 
 ---
 
-## Phase 4 — Verify Node Resources
+## Phase 5 — Verify Node Resources
 Instruct the user to confirm that GVA resources appear on nodes:
 
 ```bash
@@ -88,7 +118,7 @@ Expected signals:
 
 ---
 
-## Phase 5 — Deploy Workloads
+## Phase 6 — Deploy Workloads
 Provide a pod/deployment snippet that:
 - Requests exactly **1** unit of the chosen Application Resource
 - Adds a toleration for the GVA taint

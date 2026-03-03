@@ -8,17 +8,174 @@ ask() {
   printf "%s" "$var"
 }
 
+select_from_list() {
+  local prompt="$1"; shift
+  local items=("$@")
+  local choice=""
+  say "$prompt"
+  select choice in "${items[@]}" "Manual entry"; do
+    if [[ "$choice" == "Manual entry" ]]; then
+      choice=""
+      break
+    elif [[ -n "$choice" ]]; then
+      break
+    fi
+  done
+  printf "%s" "$choice"
+}
+
+oci_available="yes"
+if ! command -v oci >/dev/null 2>&1; then
+  oci_available="no"
+fi
+
 say "GVA Node Pool Builder (OKE)"
 say "Answer the prompts to generate an OCI CLI command."
 
-cluster_ocid=$(ask "Cluster OCID: ")
-region=$(ask "Region (e.g., us-ashburn-1): ")
-compartment_ocid=$(ask "Compartment OCID: ")
+cluster_name=$(ask "Cluster name (default: cluster3): ")
+if [[ -z "$cluster_name" ]]; then
+  cluster_name="cluster3"
+fi
+
+profile_name=$(ask "OCI CLI profile (optional): ")
+region=$(ask "Region (optional, press Enter to auto): ")
+compartment_ocid=$(ask "Compartment OCID (optional): ")
+
+discovery_json=""
+if [[ "$oci_available" == "yes" ]]; then
+  discover_cmd=(./scripts/gva-discover.sh --cluster "$cluster_name" --timeout 10)
+  if [[ -n "$region" ]]; then
+    discover_cmd+=(--region "$region")
+  fi
+  if [[ -n "$compartment_ocid" ]]; then
+    discover_cmd+=(--compartment-id "$compartment_ocid")
+  fi
+  if [[ -n "$profile_name" ]]; then
+    discover_cmd+=(--profile "$profile_name")
+  fi
+
+  discovery_json=$("${discover_cmd[@]}" 2>/dev/null || true)
+fi
+
+cluster_ocid=""
+cluster_k8s=""
+subnet_lines=()
+nsg_lines=()
+
+if [[ -n "$discovery_json" ]]; then
+  cluster_ocid=$(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+print(d.get('cluster',{}).get('id',''))
+PY
+  <<<"$discovery_json")
+
+  cluster_k8s=$(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+print(d.get('cluster',{}).get('kubernetes_version',''))
+PY
+  <<<"$discovery_json")
+
+  comp_from_discovery=$(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+print(d.get('cluster',{}).get('compartment_id',''))
+PY
+  <<<"$discovery_json")
+
+  region_from_discovery=$(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+print(d.get('cluster',{}).get('region',''))
+PY
+  <<<"$discovery_json")
+
+  if [[ -z "$compartment_ocid" && -n "$comp_from_discovery" ]]; then
+    compartment_ocid="$comp_from_discovery"
+  fi
+  if [[ -z "$region" && -n "$region_from_discovery" ]]; then
+    region="$region_from_discovery"
+  fi
+
+  mapfile -t subnet_lines < <(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+for s in d.get('subnets',[]):
+    name=s.get('name') or ''
+    sid=s.get('id') or ''
+    cidr=s.get('cidr') or ''
+    if name and sid:
+        print(f"{name} | {cidr} | {sid}")
+PY
+  <<<"$discovery_json")
+
+  mapfile -t nsg_lines < <(python3 - <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.stdin.read())
+except Exception:
+    d={}
+for n in d.get('nsgs',[]):
+    name=n.get('name') or ''
+    nid=n.get('id') or ''
+    if name and nid:
+        print(f"{name} | {nid}")
+PY
+  <<<"$discovery_json")
+fi
+
+if [[ -z "$cluster_ocid" ]]; then
+  cluster_ocid=$(ask "Cluster OCID: ")
+fi
+
+if [[ -z "$region" ]]; then
+  region=$(ask "Region (e.g., us-ashburn-1): ")
+fi
+
+if [[ -z "$compartment_ocid" ]]; then
+  compartment_ocid=$(ask "Compartment OCID: ")
+fi
+
 ad=$(ask "Availability Domain (e.g., GrCh:US-ASHBURN-AD-1): ")
-primary_subnet=$(ask "Primary subnet OCID (node placement subnet): ")
+
+primary_subnet=""
+if [[ ${#subnet_lines[@]} -gt 0 ]]; then
+  selection=$(select_from_list "Select primary subnet (node placement):" "${subnet_lines[@]}")
+  if [[ -n "$selection" ]]; then
+    primary_subnet=$(printf "%s" "$selection" | cut -d'|' -f3 | xargs)
+  fi
+fi
+if [[ -z "$primary_subnet" ]]; then
+  primary_subnet=$(ask "Primary subnet OCID (node placement subnet): ")
+fi
 
 node_pool_name=$(ask "Node pool name: ")
-k8s_version=$(ask "Kubernetes version (e.g., v1.34.1): ")
+
+k8s_version=""
+if [[ -n "$cluster_k8s" ]]; then
+  k8s_version=$cluster_k8s
+  say "Using cluster Kubernetes version: $k8s_version"
+fi
+if [[ -z "$k8s_version" ]]; then
+  k8s_version=$(ask "Kubernetes version (e.g., v1.34.1): ")
+fi
+
 shape=$(ask "Node shape (e.g., VM.Standard.E5.Flex): ")
 
 type_is_flex="no"
@@ -51,13 +208,36 @@ select cni_ok in "Yes" "No"; do
 
 # Collect VNIC profiles
 profiles=()
+profile_summaries=()
 while true; do
   say ""
   say "Add a secondary VNIC profile (GVA tier)"
   app_res=$(ask "  applicationResource (label): ")
-  subnet_id=$(ask "  subnetId OCID: ")
+
+  subnet_id=""
+  if [[ ${#subnet_lines[@]} -gt 0 ]]; then
+    selection=$(select_from_list "  Select subnet for this profile:" "${subnet_lines[@]}")
+    if [[ -n "$selection" ]]; then
+      subnet_id=$(printf "%s" "$selection" | cut -d'|' -f3 | xargs)
+    fi
+  fi
+  if [[ -z "$subnet_id" ]]; then
+    subnet_id=$(ask "  subnetId OCID: ")
+  fi
+
   ip_count=$(ask "  ipCount (max 16): ")
-  nsg_ids=$(ask "  nsgIds (comma-separated OCIDs, optional): ")
+
+  nsg_ids=""
+  if [[ ${#nsg_lines[@]} -gt 0 ]]; then
+    selection=$(select_from_list "  Select NSG (or Manual entry):" "${nsg_lines[@]}")
+    if [[ -n "$selection" ]]; then
+      nsg_ids=$(printf "%s" "$selection" | cut -d'|' -f2 | xargs)
+    fi
+  fi
+  if [[ -z "$nsg_ids" ]]; then
+    nsg_ids=$(ask "  nsgIds (comma-separated OCIDs, optional): ")
+  fi
+
   display_name=$(ask "  displayName (optional): ")
 
   # Build JSON object
@@ -81,6 +261,7 @@ while true; do
   fi
 
   profiles+=("{\"createVnicDetails\":{\"ipCount\":$ip_count,\"applicationResources\":[\"$app_res\"],\"assignPublicIp\":false,\"displayName\":$display_field,\"nsgIds\":$nsg_json,\"subnetId\":\"$subnet_id\",\"skipSourceDestCheck\":false},\"displayName\":$display_field}")
+  profile_summaries+=("$app_res | ipCount=$ip_count | subnet=$subnet_id")
 
   say ""
   select more in "Add another profile" "Finish"; do
@@ -107,6 +288,28 @@ if [[ "$type_is_flex" == "yes" ]]; then
 fi
 
 say ""
+say "Summary:"
+say "- Cluster: $cluster_name"
+say "- Cluster OCID: $cluster_ocid"
+say "- Region: $region"
+say "- Compartment: $compartment_ocid"
+say "- AD: $ad"
+say "- Node pool: $node_pool_name"
+say "- Shape: $shape"
+say "- Node count: $node_count"
+say "- K8s version: $k8s_version"
+say "- Primary subnet: $primary_subnet"
+for p in "${profile_summaries[@]}"; do
+  say "- VNIC: $p"
+ done
+
+confirm=$(ask "Proceed to print CLI command? (y/N): ")
+if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+  say "Aborted."
+  exit 0
+fi
+
+say ""
 say "Generated OCI CLI command:"
 cat <<CMD
 oci ce node-pool create \
@@ -124,7 +327,38 @@ oci ce node-pool create \
 CMD
 
 say ""
+say "Sample test Deployment (replace ResourceName/image):"
+cat <<'YAML'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gva-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gva-test
+  template:
+    metadata:
+      labels:
+        app: gva-test
+    spec:
+      tolerations:
+        - key: "oci.oraclecloud.com/application-resource-only"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: app
+          image: <image>
+          resources:
+            requests:
+              oke-application-resource.oci.oraclecloud.com/ResourceName: "1"
+            limits:
+              oke-application-resource.oci.oraclecloud.com/ResourceName: "1"
+YAML
+
+say ""
 say "Next steps:"
 say "1) Run the command above."
 say "2) Verify resources on a node: kubectl describe node <node_name>"
-say "3) Deploy a pod requesting one Application Resource and add the taint toleration."
+say "3) Apply the test Deployment (with your chosen ResourceName)."
