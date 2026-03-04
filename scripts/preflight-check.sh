@@ -25,6 +25,15 @@ emit_error() {
   exit "$exit_code"
 }
 
+TMP_SUBSCRIPTIONS_JSON="$(mktemp)"
+TMP_COMPARTMENTS_JSON="$(mktemp)"
+TMP_REGIONS_JSON="$(mktemp)"
+TMP_COMPARTMENTS_OUT_JSON="$(mktemp)"
+cleanup_tmp() {
+  rm -f "$TMP_SUBSCRIPTIONS_JSON" "$TMP_COMPARTMENTS_JSON" "$TMP_REGIONS_JSON" "$TMP_COMPARTMENTS_OUT_JSON"
+}
+trap cleanup_tmp EXIT
+
 # ── step 1: verify OCI CLI is installed ──────────────────────────────────────
 
 if ! command -v oci >/dev/null 2>&1; then
@@ -48,10 +57,14 @@ fi
 # ── step 3: extract tenancy OCID and home region ─────────────────────────────
 
 RAW_SUBSCRIPTIONS=$(oci iam region-subscription list --output json 2>/dev/null) || RAW_SUBSCRIPTIONS='{"data":[]}'
+printf '%s' "$RAW_SUBSCRIPTIONS" > "$TMP_SUBSCRIPTIONS_JSON"
 
-TENANCY_INFO=$(python3 - "$RAW_SUBSCRIPTIONS" <<'PYEOF'
-import sys, json
-data = json.loads(sys.argv[1]).get("data", [])
+TENANCY_INFO=$(python3 - "$TMP_SUBSCRIPTIONS_JSON" <<'PYEOF'
+import json
+import sys
+from pathlib import Path
+raw = Path(sys.argv[1]).read_text() or '{"data":[]}'
+data = json.loads(raw).get("data", [])
 home = next((r for r in data if r.get("is-home-region")), None)
 if not home:
     print("ERROR")
@@ -81,13 +94,17 @@ fi
 
 # ── step 4: list subscribed regions ──────────────────────────────────────────
 
-REGIONS_JSON=$(python3 - "$RAW_SUBSCRIPTIONS" <<'PYEOF'
-import sys, json
-data = json.loads(sys.argv[1]).get("data", [])
+REGIONS_JSON=$(python3 - "$TMP_SUBSCRIPTIONS_JSON" <<'PYEOF'
+import json
+import sys
+from pathlib import Path
+raw = Path(sys.argv[1]).read_text() or '{"data":[]}'
+data = json.loads(raw).get("data", [])
 regions = [{"region": r.get("region-name",""), "status": r.get("status","")} for r in data]
 print(json.dumps(regions))
 PYEOF
 ) || REGIONS_JSON='[]'
+printf '%s' "$REGIONS_JSON" > "$TMP_REGIONS_JSON"
 
 # ── step 5: list active compartments ─────────────────────────────────────────
 
@@ -97,10 +114,14 @@ RAW_COMPARTMENTS=$(oci iam compartment list \
   --all \
   --lifecycle-state ACTIVE \
   --output json 2>/dev/null) || RAW_COMPARTMENTS='{"data":[]}'
+printf '%s' "$RAW_COMPARTMENTS" > "$TMP_COMPARTMENTS_JSON"
 
-COMPARTMENTS_JSON=$(python3 - "$RAW_COMPARTMENTS" "$TENANCY_OCID" <<'PYEOF'
-import sys, json
-data = json.loads(sys.argv[1]).get("data", [])
+COMPARTMENTS_JSON=$(python3 - "$TMP_COMPARTMENTS_JSON" "$TENANCY_OCID" <<'PYEOF'
+import json
+import sys
+from pathlib import Path
+raw = Path(sys.argv[1]).read_text() or '{"data":[]}'
+data = json.loads(raw).get("data", [])
 tenancy_ocid = sys.argv[2]
 compartments = [{"name": c.get("name",""), "ocid": c.get("id",""), "parent": c.get("compartment-id","")} for c in data]
 # prepend root compartment (the tenancy itself)
@@ -108,16 +129,20 @@ compartments.insert(0, {"name": "root (tenancy)", "ocid": tenancy_ocid, "parent"
 print(json.dumps(compartments))
 PYEOF
 ) || COMPARTMENTS_JSON='[]'
+printf '%s' "$COMPARTMENTS_JSON" > "$TMP_COMPARTMENTS_OUT_JSON"
 
 # ── step 6: emit structured output ───────────────────────────────────────────
 
-python3 - "$TENANCY_OCID" "$HOME_REGION" "$REGIONS_JSON" "$COMPARTMENTS_JSON" <<'PYEOF'
+python3 - "$TENANCY_OCID" "$HOME_REGION" "$TMP_REGIONS_JSON" "$TMP_COMPARTMENTS_OUT_JSON" <<'PYEOF'
 import sys, json
+from pathlib import Path
+regions_raw = Path(sys.argv[3]).read_text()
+compartments_raw = Path(sys.argv[4]).read_text()
 result = {
     "tenancy_ocid":  sys.argv[1],
     "home_region":   sys.argv[2],
-    "regions":       json.loads(sys.argv[3]),
-    "compartments":  json.loads(sys.argv[4])
+    "regions":       json.loads(regions_raw),
+    "compartments":  json.loads(compartments_raw)
 }
 print(json.dumps(result, indent=2))
 PYEOF

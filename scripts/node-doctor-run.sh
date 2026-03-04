@@ -76,7 +76,7 @@ if ! command -v kubectl >/dev/null 2>&1; then
   emit_error 2 "KUBECTL_NOT_INSTALLED" "kubectl is not installed or not on PATH." "Install kubectl and retry."
 fi
 
-debug_cmd=(kubectl debug "node/${node_name}" -it --image="${image_name}" -- chroot /host sudo /usr/local/bin/node-doctor.sh --check)
+debug_cmd=(kubectl -n "$namespace" debug "node/${node_name}" --image="${image_name}" -- chroot /host sudo /usr/local/bin/node-doctor.sh --check)
 
 set +e
 raw_out="$("${debug_cmd[@]}" 2>&1)"

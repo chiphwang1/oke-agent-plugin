@@ -119,6 +119,7 @@ oci_json() {
     cmd=("${timeout_prefix[@]}" "${cmd[@]}")
   fi
   if [[ "$use_py_timeout" == "yes" ]]; then
+    set +e
     out="$(python3 - "$timeout_arg" "$err" "${cmd[@]}" <<'PY'
 import subprocess, sys
 timeout = float(sys.argv[1])
@@ -138,9 +139,12 @@ except subprocess.TimeoutExpired:
 PY
 )"
     rc=$?
+    set -e
   else
+    set +e
     out="$("${cmd[@]}" 2>"$err")"
     rc=$?
+    set -e
   fi
   if [[ $rc -ne 0 ]]; then
     echo "error: oci $* failed (exit $rc)" >&2
@@ -150,6 +154,28 @@ PY
   fi
   rm -f "$err"
   printf "%s" "$out"
+}
+
+json_get_field() {
+  local field="$1"
+  python3 -c '
+import json
+import sys
+
+field = sys.argv[1]
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    data = {}
+
+if isinstance(data, dict):
+    value = data.get(field, "")
+    if value is None:
+        value = ""
+    print(value)
+else:
+    print("")
+' "$field"
 }
 
 cluster_ocid=""
@@ -230,33 +256,9 @@ fi
 # Fetch cluster details if possible
 cluster_json=$(oci_json ce cluster get --cluster-id "$cluster_ocid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id"}' --output json || true)
 if [[ -n "$cluster_json" && "$cluster_json" != "{}" ]]; then
-  cluster_name=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('name',''))
-PY
-  <<<"$cluster_json")
-  cluster_k8s=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('k8s',''))
-PY
-  <<<"$cluster_json")
-  compartment_ocid=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('compartment',''))
-PY
-  <<<"$cluster_json")
+  cluster_name=$(printf '%s' "$cluster_json" | json_get_field name)
+  cluster_k8s=$(printf '%s' "$cluster_json" | json_get_field k8s)
+  compartment_ocid=$(printf '%s' "$cluster_json" | json_get_field compartment)
 else
   echo "warning: failed to fetch cluster details; returning partial context" >&2
   cluster_name="$cluster_ref"

@@ -389,27 +389,50 @@ while true; do
 
   display_name=$(ask "  displayName (optional): ")
 
-  # Build JSON object
-  nsg_json="null"
-  if [[ -n "$nsg_ids" ]]; then
-    IFS=',' read -r -a nsg_arr <<< "$nsg_ids"
-    nsg_json="["
-    for i in "${!nsg_arr[@]}"; do
-      nsg_arr[$i]="${nsg_arr[$i]// /}"
-      nsg_json+="\"${nsg_arr[$i]}\""
-      if [[ $i -lt $((${#nsg_arr[@]}-1)) ]]; then
-        nsg_json+=",";
-      fi
-    done
-    nsg_json+="]"
-  fi
+  profile_json="$(
+    APP_RES="$app_res" \
+    SUBNET_ID="$subnet_id" \
+    IP_COUNT="$ip_count" \
+    NSG_IDS="$nsg_ids" \
+    DISPLAY_NAME="$display_name" \
+    python3 - <<'PY'
+import json
+import os
+import sys
 
-  display_field="null"
-  if [[ -n "$display_name" ]]; then
-    display_field="\"$display_name\""
-  fi
+app_res = os.environ.get("APP_RES", "")
+subnet_id = os.environ.get("SUBNET_ID", "")
+display_name = os.environ.get("DISPLAY_NAME", "")
+nsg_ids_raw = os.environ.get("NSG_IDS", "")
+ip_count_raw = os.environ.get("IP_COUNT", "")
 
-  profiles+=("{\"createVnicDetails\":{\"ipCount\":$ip_count,\"applicationResources\":[\"$app_res\"],\"assignPublicIp\":false,\"displayName\":$display_field,\"nsgIds\":$nsg_json,\"subnetId\":\"$subnet_id\",\"skipSourceDestCheck\":false},\"displayName\":$display_field}")
+try:
+    ip_count = int(ip_count_raw)
+except ValueError:
+    print("Invalid ipCount. Expected an integer.", file=sys.stderr)
+    sys.exit(2)
+
+nsg_ids = [x.strip() for x in nsg_ids_raw.split(",") if x.strip()] if nsg_ids_raw else None
+display_field = display_name if display_name else None
+
+obj = {
+    "createVnicDetails": {
+        "ipCount": ip_count,
+        "applicationResources": [app_res],
+        "assignPublicIp": False,
+        "displayName": display_field,
+        "nsgIds": nsg_ids,
+        "subnetId": subnet_id,
+        "skipSourceDestCheck": False,
+    },
+    "displayName": display_field,
+}
+
+print(json.dumps(obj, separators=(",", ":")))
+PY
+  )"
+
+  profiles+=("$profile_json")
   profile_summaries+=("$app_res | ipCount=$ip_count | subnet=$subnet_id")
 
   say ""

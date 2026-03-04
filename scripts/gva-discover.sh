@@ -120,6 +120,7 @@ oci_json() {
     cmd=("${timeout_prefix[@]}" "${cmd[@]}")
   fi
   if [[ "$use_py_timeout" == "yes" ]]; then
+    set +e
     out="$(python3 - "$timeout_arg" "$err" "${cmd[@]}" <<'PY'
 import subprocess, sys
 timeout = float(sys.argv[1])
@@ -139,9 +140,12 @@ except subprocess.TimeoutExpired:
 PY
 )"
     rc=$?
+    set -e
   else
+    set +e
     out="$("${cmd[@]}" 2>"$err")"
     rc=$?
+    set -e
   fi
   if [[ $rc -ne 0 ]]; then
     echo "error: oci $* failed (exit $rc)" >&2
@@ -151,6 +155,28 @@ PY
   fi
   rm -f "$err"
   printf "%s" "$out"
+}
+
+json_get_field() {
+  local field="$1"
+  python3 -c '
+import json
+import sys
+
+field = sys.argv[1]
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    data = {}
+
+if isinstance(data, dict):
+    value = data.get(field, "")
+    if value is None:
+        value = ""
+    print(value)
+else:
+    print("")
+' "$field"
 }
 
 # If cluster ref is OCID, use it directly. Otherwise require compartment to search by name.
@@ -170,33 +196,9 @@ if [[ "$is_ocid" == "yes" ]]; then
   if [[ -z "$cluster_json" || "$cluster_json" == "{}" ]]; then
     echo "warning: failed to fetch cluster details for $cluster_ocid (check auth/region/profile)" >&2
   else
-    cluster_name=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('name',''))
-PY
-    <<<"$cluster_json")
-    cluster_k8s=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('k8s',''))
-PY
-    <<<"$cluster_json")
-    compartment_ocid=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('compartment',''))
-PY
-    <<<"$cluster_json")
+    cluster_name=$(printf '%s' "$cluster_json" | json_get_field name)
+    cluster_k8s=$(printf '%s' "$cluster_json" | json_get_field k8s)
+    compartment_ocid=$(printf '%s' "$cluster_json" | json_get_field compartment)
   fi
 else
   # Try to resolve cluster OCID from kubeconfig if no compartment was provided.
@@ -291,36 +293,12 @@ PY
           for cid in "${kube_cluster_ids[@]}"; do
             match_json=$(oci_json ce cluster get --cluster-id "$cid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id"}' --output json || true)
             if [[ -n "$match_json" && "$match_json" != "{}" ]]; then
-              match_name=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('name',''))
-PY
-              <<<"$match_json")
+              match_name=$(printf '%s' "$match_json" | json_get_field name)
               if [[ "$match_name" == "$cluster_ref" ]]; then
                 cluster_ocid="$cid"
                 cluster_name="$match_name"
-                cluster_k8s=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('k8s',''))
-PY
-                <<<"$match_json")
-                compartment_ocid=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('compartment',''))
-PY
-                <<<"$match_json")
+                cluster_k8s=$(printf '%s' "$match_json" | json_get_field k8s)
+                compartment_ocid=$(printf '%s' "$match_json" | json_get_field compartment)
                 is_ocid="yes"
                 break
               fi
@@ -336,33 +314,9 @@ PY
     if [[ -z "$cluster_json" || "$cluster_json" == "{}" ]]; then
       echo "warning: failed to fetch cluster details for $cluster_ocid (check auth/region/profile)" >&2
     else
-      cluster_name=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('name',''))
-PY
-      <<<"$cluster_json")
-      cluster_k8s=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('k8s',''))
-PY
-      <<<"$cluster_json")
-      compartment_ocid=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('compartment',''))
-PY
-      <<<"$cluster_json")
+      cluster_name=$(printf '%s' "$cluster_json" | json_get_field name)
+      cluster_k8s=$(printf '%s' "$cluster_json" | json_get_field k8s)
+      compartment_ocid=$(printf '%s' "$cluster_json" | json_get_field compartment)
     fi
   fi
 
@@ -374,35 +328,32 @@ PY
   fi
 
   comp_to_search="${compartment_arg:-$compartment_ocid}"
-  hit=$(oci_json ce cluster list --compartment-id "$comp_to_search" --query "data[?name=='$cluster_ref']|[0]" --output json || true)
+  clusters_json=$(oci_json ce cluster list --compartment-id "$comp_to_search" --output json || true)
+  hit=""
+  if [[ -n "$clusters_json" ]]; then
+    hit=$(printf '%s' "$clusters_json" | CLUSTER_REF="$cluster_ref" python3 -c '
+import json
+import os
+import sys
+
+target = os.environ.get("CLUSTER_REF", "")
+try:
+    payload = json.loads(sys.stdin.read())
+except Exception:
+    print("")
+    raise SystemExit(0)
+
+items = payload.get("data", []) if isinstance(payload, dict) else []
+for item in items:
+    if (item or {}).get("name", "") == target:
+        print(json.dumps(item))
+        break
+')
+  fi
   if [[ -n "$hit" && "$hit" != "null" ]]; then
-    cluster_ocid=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('id',''))
-PY
-    <<<"$hit")
-    cluster_name=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('name',''))
-PY
-    <<<"$hit")
-    cluster_k8s=$(python3 - <<'PY'
-import json,sys
-try:
-    d=json.loads(sys.stdin.read())
-except Exception:
-    d={}
-print(d.get('kubernetes-version',''))
-PY
-    <<<"$hit")
+    cluster_ocid=$(printf '%s' "$hit" | json_get_field id)
+    cluster_name=$(printf '%s' "$hit" | json_get_field name)
+    cluster_k8s=$(printf '%s' "$hit" | json_get_field kubernetes-version)
     compartment_ocid="$comp_to_search"
   fi
 fi
