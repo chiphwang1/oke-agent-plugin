@@ -59,6 +59,12 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - `oci nlb network-load-balancer list --compartment-id <compartment> --region <region> --all --output json | jq -r '.data[] | select((."ip-addresses" // []) | any(."ip-address"=="<lb-ip>")) | .id'` (fallback if classic LB lookup is empty)
   - `oci network nsg list --compartment-id <compartment>`
   - `oci network subnet get --subnet-id <ocid>`
+- **Subagent preference**
+  - Prefer delegating LB-specific discovery/log retrieval to `oke-lb-log-collector`:
+    - resolves LB/NLB OCID from Service IP
+    - checks access-log status
+    - optionally enables logging (with explicit user approval path)
+    - extracts log issue signals for ranking
 - **Normalization tips**: Note load balancer lifecycle (`PROVISIONING`, `FAILED`), security list/NSG rules, CNI pod status, service annotations impacting provisioning. Explicitly record LB logging status as `enabled`, `disabled`, or `unknown`.
 - **If LB logs are disabled or unknown**: recommend enabling access logs before closing the incident so future RCA has request-level evidence.
   - Offer operator action:

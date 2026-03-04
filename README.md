@@ -95,7 +95,8 @@ oke-agent-plugin/
 │   └── plugin.json                         # Plugin manifest
 ├── agents/
 │   ├── oke-evidence-collector.md           # Haiku subagent for command execution
-│   └── oke-hypothesis-analyst.md           # Sonnet subagent for hypothesis scoring
+│   ├── oke-hypothesis-analyst.md           # Sonnet subagent for hypothesis scoring
+│   └── oke-lb-log-collector.md             # Haiku subagent for LB logging evidence
 ├── settings.json                           # Claude Code settings
 ├── skills/
 │   ├── oke-cluster-generator/
