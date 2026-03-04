@@ -63,6 +63,7 @@ Performs end-to-end diagnosis of OKE incidents by correlating Kubernetes symptom
 ```bash
 /oke-agent-plugin:oke-troubleshooter "pods stuck Pending in prod namespace"
 /oke-agent-plugin:oke-troubleshooter "service payments-lb has no IP us-phoenix-1"
+/oke-agent-plugin:oke-troubleshooter "customer is indicating poor performance for deployment"
 ```
 
 ### `/oke-agent-plugin:oke-LA-feature-gva-deployer`
