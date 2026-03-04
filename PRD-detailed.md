@@ -64,6 +64,12 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
   - Application Resource labels
   - Validation guidance
 - Provide a test deployment manifest to validate GVA functionality.
+ - Enforce safety checks before command generation:
+   - Require VCN‑Native CNI
+   - `ipCount` ≤ 16
+   - One Application Resource per pod
+   - Validate shape/VNIC attachment limits where possible
+   - Provide max‑pods guidance when GVA is enabled
 
 ## 7. Non‑Functional Requirements
 - **Error Contract:**
@@ -75,6 +81,9 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
   - Graceful degradation when OCI CLI or permissions are missing.
 - **Usability:**
   - Clear prompts at each phase and summarized confirmations.
+ - **Discovery & Fallback:**
+   - If OCI CLI is unavailable, continue with manual prompts.
+   - If OCI CLI is available but calls fail (auth/permission/timeout), collect partial context and prompt for missing fields.
 
 ## 8. User Flows
 ### 8.1 Cluster Generator Flow
@@ -114,17 +123,22 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 ### LA Feature Deployer (GVA)
 - Generates a syntactically valid `oci ce node-pool create` command.
 - Validation manifest deploys successfully in test environment.
+ - Success signals:
+   - GVA extended resources appear on nodes.
+   - Test pod schedules and runs with required toleration and Application Resource.
 
 ## 11. Success Metrics
 - 50% reduction in time to produce initial Terraform/ORM assets.
 - 30% reduction in average incident triage time for OKE issues.
 - 80% first‑attempt success rate for GVA node pool creation in test environments.
+ - Define baseline and measurement method for each metric before tracking.
 
 ## 12. Risks and Mitigations
 - **CLI not authenticated:** fail fast with remediation instructions.
 - **Insufficient permissions:** return partial evidence with explicit warnings.
 - **Module drift:** update reference mappings when upstream Terraform module changes.
 - **Feature gating:** LA features may change requirements; include versioned validation guidance.
+ - **CLI timeouts:** Provide manual fallback and retry guidance.
 
 ## 13. Competitive Context (Detailed)
 - **AWS EKS:** Amazon Q provides console‑embedded diagnostics but lacks integrated IaC generation workflows.
@@ -139,3 +153,4 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 - Should LA enablement workflows include a formal approval checkpoint?
 - Do we need a compatibility matrix for OCI CLI and Kubernetes versions?
 - What telemetry (if any) is acceptable for troubleshooting outcomes?
+ - What is the baseline for time‑to‑provision and MTTR measurements?
