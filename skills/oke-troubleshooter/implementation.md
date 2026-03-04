@@ -18,7 +18,7 @@ The troubleshooter focuses on:
 ## Discovery Flow (New)
 1. User provides **cluster name** (or OCID).
 2. `scripts/oke-discover.sh` resolves cluster OCID from `~/.kube/config`.
-3. Region defaults are pulled from `/Users/chipinghwang/.oci/config`.
+3. Region defaults are pulled from `~/.oci/config`.
 4. `oci ce cluster get --cluster-id <ocid>` retrieves compartment and K8s version.
 5. The skill auto-populates `cluster_ocid`, `compartment_ocid`, and `region`.
 6. Prompt only for missing context (namespace, time window, resource names).

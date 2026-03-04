@@ -48,10 +48,8 @@ fi
 # Pull defaults from OCI config
 config_file="$HOME/.oci/config"
 config_region=""
-config_tenancy=""
 if [[ -f "$config_file" ]]; then
   config_region=$(awk -F= '/^region=/{print $2; exit}' "$config_file" | tr -d ' ')
-  config_tenancy=$(awk -F= '/^tenancy=/{print $2; exit}' "$config_file" | tr -d ' ')
 fi
 
 region=$(ask "Region (default: ${config_region:-none}): ")
@@ -66,8 +64,13 @@ kubeconfig_path="$HOME/.kube/config"
 cluster_ocid=""
 if [[ -f "$kubeconfig_path" ]]; then
   cluster_ocid=$(python3 - "$kubeconfig_path" "$cluster_name" <<'PY'
-import sys, yaml
+import sys
 from pathlib import Path
+try:
+    import yaml
+except Exception:
+    print("")
+    raise SystemExit(0)
 path = Path(sys.argv[1])
 name = sys.argv[2]
 try:
@@ -79,13 +82,28 @@ except Exception:
 contexts = data.get("contexts", []) or []
 users = {u.get("name"): u.get("user", {}) for u in (data.get("users", []) or [])}
 
-match_user = None
-for c in contexts:
-    cname = c.get("name", "")
-    if name in cname:
-        match_user = (c.get("context", {}) or {}).get("user")
-        if match_user:
-            break
+def pick_user(contexts, target):
+    exact = []
+    exact_ci = []
+    contains = []
+    for c in contexts:
+        cname = c.get("name", "")
+        cuser = (c.get("context", {}) or {}).get("user")
+        if not cuser:
+            continue
+        if cname == target:
+            exact.append((len(cname), cname, cuser))
+        elif cname.lower() == target.lower():
+            exact_ci.append((len(cname), cname, cuser))
+        elif target and target in cname:
+            contains.append((len(cname), cname, cuser))
+    for bucket in (exact, exact_ci, contains):
+        if bucket:
+            bucket.sort()
+            return bucket[0][2]
+    return None
+
+match_user = pick_user(contexts, name)
 
 if not match_user:
     print("")
@@ -124,6 +142,7 @@ fi
 cluster_k8s=""
 subnet_lines=()
 nsg_lines=()
+vcn_lines=()
 
 if [[ -n "$discovery_json" ]]; then
   cluster_k8s=$(python3 - <<'PY'
@@ -360,7 +379,10 @@ while true; do
   nsg_ids=""
   if [[ ${#nsg_lines[@]} -gt 0 ]]; then
     selection=$(select_from_list "  Select NSG (or type none):" "${nsg_lines[@]}")
-    nsg_ids=$(normalize_none "$selection")
+    if [[ -n "$selection" ]]; then
+      nsg_ids=$(printf "%s" "$selection" | cut -d'|' -f2 | xargs)
+    fi
+    nsg_ids=$(normalize_none "$nsg_ids")
   else
     nsg_ids=$(normalize_none "$(ask "  nsgIds (comma-separated OCIDs, optional): ")")
   fi
@@ -414,52 +436,52 @@ if [[ "$type_is_flex" == "yes" ]]; then
   shape_config="{\"ocpus\":$ocpus,\"memoryInGBs\":$mem_gb}"
 fi
 
-optional_lines=""
+optional_args=()
 add_optional=$(ask "Add optional node-pool parameters? (y/N): ")
 if [[ "${add_optional,,}" == "y" || "${add_optional,,}" == "yes" ]]; then
   defined_tags=$(ask "  --defined-tags (JSON or file://path, optional): ")
   if [[ -n "$defined_tags" ]]; then
-    optional_lines+="  --defined-tags '$defined_tags' \\\\\n"
+    optional_args+=("--defined-tags" "$defined_tags")
   fi
 
   freeform_tags=$(ask "  --freeform-tags (JSON or file://path, optional): ")
   if [[ -n "$freeform_tags" ]]; then
-    optional_lines+="  --freeform-tags '$freeform_tags' \\\\\n"
+    optional_args+=("--freeform-tags" "$freeform_tags")
   fi
 
   initial_labels=$(ask "  --initial-node-labels (JSON or file://path, optional): ")
   if [[ -n "$initial_labels" ]]; then
-    optional_lines+="  --initial-node-labels '$initial_labels' \\\\\n"
+    optional_args+=("--initial-node-labels" "$initial_labels")
   fi
 
   max_pods=$(ask "  --max-pods-per-node (integer, optional): ")
   if [[ -n "$max_pods" ]]; then
-    optional_lines+="  --max-pods-per-node $max_pods \\\\\n"
+    optional_args+=("--max-pods-per-node" "$max_pods")
   fi
 
   pv_encrypt=$(ask "  --is-pv-encryption-in-transit-enabled? (y/N): ")
   if [[ "${pv_encrypt,,}" == "y" || "${pv_encrypt,,}" == "yes" ]]; then
-    optional_lines+="  --is-pv-encryption-in-transit-enabled true \\\\\n"
+    optional_args+=("--is-pv-encryption-in-transit-enabled" "true")
   fi
 
   kms_key=$(ask "  --kms-key-id (OCID, optional): ")
   if [[ -n "$kms_key" ]]; then
-    optional_lines+="  --kms-key-id '$kms_key' \\\\\n"
+    optional_args+=("--kms-key-id" "$kms_key")
   fi
 
   boot_size=$(ask "  --node-boot-volume-size-in-gbs (integer, optional): ")
   if [[ -n "$boot_size" ]]; then
-    optional_lines+="  --node-boot-volume-size-in-gbs $boot_size \\\\\n"
+    optional_args+=("--node-boot-volume-size-in-gbs" "$boot_size")
   fi
 
   node_metadata=$(ask "  --node-metadata (JSON or file://path, optional): ")
   if [[ -n "$node_metadata" ]]; then
-    optional_lines+="  --node-metadata '$node_metadata' \\\\\n"
+    optional_args+=("--node-metadata" "$node_metadata")
   fi
 
   ssh_key=$(ask "  --ssh-public-key (string or file://path, optional): ")
   if [[ -n "$ssh_key" ]]; then
-    optional_lines+="  --ssh-public-key '$ssh_key' \\\\\n"
+    optional_args+=("--ssh-public-key" "$ssh_key")
   fi
 fi
 
@@ -500,29 +522,28 @@ fi
 
 say ""
 say "Generated OCI CLI command:"
-cmd_text=$(cat <<CMD
-oci ce node-pool create \
-  --compartment-id "$compartment_ocid" \
-  --cluster-id "$cluster_ocid" \
-  --name "$node_pool_name" \
-  --kubernetes-version "$k8s_version" \
-  --node-shape "$shape" \
-  --node-shape-config '$shape_config' \
-  --size $node_count \
-  --cni-type OCI_VCN_IP_NATIVE \
-  --placement-configs '[{"availabilityDomain":"$ad","subnetId":"$primary_subnet"}]' \
-  --node-source-details '{"sourceType":"IMAGE","imageId":"$image_ocid"}' \
-  --secondary-vnics '$secondary_vnics_json' \
-${optional_lines%\\}
-CMD
+cmd=(
+  oci ce node-pool create
+  --compartment-id "$compartment_ocid"
+  --cluster-id "$cluster_ocid"
+  --name "$node_pool_name"
+  --kubernetes-version "$k8s_version"
+  --node-shape "$shape"
+  --node-shape-config "$shape_config"
+  --size "$node_count"
+  --cni-type OCI_VCN_IP_NATIVE
+  --placement-configs "[{\"availabilityDomain\":\"$ad\",\"subnetId\":\"$primary_subnet\"}]"
+  --node-source-details "{\"sourceType\":\"IMAGE\",\"imageId\":\"$image_ocid\"}"
+  --secondary-vnics "$secondary_vnics_json"
 )
-
-echo "$cmd_text"
+cmd+=("${optional_args[@]}")
+printf '%q ' "${cmd[@]}"
+printf '\n'
 
 if [[ "$run_now" == "yes" ]]; then
   say ""
   say "Running command..."
-  eval "$cmd_text"
+  "${cmd[@]}"
 fi
 
 say ""

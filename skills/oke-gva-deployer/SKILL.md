@@ -20,7 +20,7 @@ Scripts:
 Flow requirements:
 1) User enters the **cluster name** (or OCID).
 2) Resolve **cluster OCID** from `~/.kube/config` when possible.
-3) Resolve **tenancy/region defaults** from `/Users/chipinghwang/.oci/config`.
+3) Resolve **tenancy/region defaults** from `~/.oci/config`.
 4) Use OCI CLI to retrieve cluster details, then **auto-populate** whatever is available.
 5) Prompt only for missing information.
 
@@ -54,7 +54,7 @@ bash ../../scripts/gva-menu.sh
 This script:
 - Uses cluster name input
 - Pulls cluster OCID from kubeconfig when possible
-- Uses tenancy/region defaults from `/Users/chipinghwang/.oci/config`
+- Uses tenancy/region defaults from `~/.oci/config`
 - Auto-discovers cluster details via OCI CLI
 - Presents lists for subnets and NSGs
 - Prompts only for missing values

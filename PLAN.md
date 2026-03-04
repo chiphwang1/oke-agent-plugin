@@ -53,17 +53,12 @@ oke-agent-plugin/
 │   │       ├── collect-k8s-state.sh   # Batch kubectl evidence (--namespace, --domain)
 │   │       ├── collect-oci-state.sh   # Batch OCI CLI evidence (--compartment-id, --domain)
 │   │       └── check-connectivity.sh  # Node/endpoint reachability
-│   └── oke-la-enablement/             # Skill 3: LA Feature Enablement
-│       ├── SKILL.md                   # Educate → prereqs → plan → confirm → execute → validate
-│       ├── education.md               # LA capabilities overview (4 monitoring views)
-│       ├── prerequisites.md           # Prerequisite table with check commands
-│       ├── enablement-steps.md        # IAM templates + helm chart install steps
-│       ├── validation.md              # Post-enablement validation checks
-│       ├── rollback.md                # Delete commands for each created resource
-│       └── scripts/
-│           ├── check-la-prereqs.sh    # LA service + policies + K8s version check
-│           ├── check-helm.sh          # Helm availability
-│           └── check-mgmt-agent.sh    # Management Agent status
+│   └── oke-gva-deployer/              # Skill 3: GVA Node Pool Deployer
+│       ├── SKILL.md                   # Guided GVA workflow and guardrails
+│       ├── USAGE.md                   # Operator usage guide
+│       ├── implementation.md          # Skill implementation notes
+│       └── references/
+│           └── gva.md                 # Feature constraints + examples
 ├── agents/
 │   ├── oke-evidence-collector.md      # Haiku subagent: parallel evidence collection
 │   ├── oke-hypothesis-analyst.md      # Sonnet subagent: RCA and hypothesis ranking
@@ -166,20 +161,17 @@ oke-agent-plugin/
 
 ---
 
-### Skill 3 — LA Feature Enablement (`/oke-la-enablement`)
+### Skill 3 — GVA Node Pool Deployer (`/oke-gva-deployer`)
 
-**Flow:** Education → Prerequisite checks → Plan generation → User confirmation → Execution → Validation
+**Flow:** Intake → discovery → profile design → command generation → verification guidance.
 
 **Key files:**
-- `skills/oke-la-enablement/SKILL.md` — 5-phase orchestration with explicit user confirmation gate
-- `skills/oke-la-enablement/prerequisites.md` — 6 checks: LA service enabled, log group permissions, K8s ≥1.22, helm, API endpoint type, mgmt agent
-- `skills/oke-la-enablement/enablement-steps.md` — IAM dynamic group + policy templates + helm install (public vs private endpoint paths)
-- `skills/oke-la-enablement/rollback.md` — delete commands for every created resource
-- `skills/oke-la-enablement/validation.md` — post-enablement checks (LA monitored clusters, log ingestion)
+- `skills/oke-gva-deployer/SKILL.md` — phase-driven GVA workflow
+- `skills/oke-gva-deployer/USAGE.md` — quick-start and manual fallback
+- `skills/oke-gva-deployer/references/gva.md` — constraints and request/limit rules
+- `scripts/gva-discover.sh` and `scripts/gva-menu.sh` — helper automation
 
-**Confirmation gate:** "yes" (execute) / "dry-run" (print commands) / "no" (save plan only). No IAM resources created without explicit approval.
-
-**Reference:** [oci-kubernetes-monitoring](https://github.com/oracle-quickstart/oci-kubernetes-monitoring) helm chart + IAM policy templates.
+**Reference:** OKE GVA documentation and OCI CLI node-pool operations.
 
 ---
 
@@ -218,7 +210,7 @@ All scripts: exit 0 (success), exit 1 (expected error), exit 2 (unexpected). Emi
 | 0: Scaffolding | Plugin loads, hooks fire, dep check runs at session start | Day 1 |
 | 1: Skill 1 | `/oke-cluster-generator` produces validated Terraform bundle | Week 1 |
 | 2: Skill 2 | `/oke-troubleshooter` produces ranked hypothesis report | Week 2 |
-| 3: Skill 3 | `/oke-la-enablement` produces executable enablement plan | Week 3 |
+| 3: Skill 3 | `/oke-gva-deployer` produces validated node-pool create command and test manifest | Week 3 |
 | 4: Integration | All 3 skills tested, audit log verified, README complete, v0.1.0 tagged | Week 4 |
 
 ---
@@ -228,7 +220,7 @@ All scripts: exit 0 (success), exit 1 (expected error), exit 2 (unexpected). Emi
 - **Plugin load:** `claude --plugin-dir . --debug 2>&1 | grep -E "(plugin|skill|hook)"` — all 3 skills appear
 - **Skill 1:** Run `/oke-cluster-generator "private cluster, 3 node pools"` → verify 4 Terraform files generated + preflight report
 - **Skill 2:** Deliberately break a pod (wrong image) → run `/oke-troubleshooter "pods in ImagePullBackOff"` → verify ImagePullBackOff is top hypothesis with evidence quote
-- **Skill 3:** Run `/oke-la-enablement` in dry-run → verify all 6 prerequisite checks run + plan file written + no IAM changes made
+- **Skill 3:** Run `/oke-gva-deployer` → verify cluster/subnet/NSG discovery and generated node-pool command
 - **Audit log:** After each skill run, inspect `~/.claude/oke-agent-audit.log` — confirm no credentials appear
 - **Script unit tests:** `bats tests/scripts/` — all pass
 

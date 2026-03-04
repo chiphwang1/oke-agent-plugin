@@ -12,52 +12,76 @@ profile_arg=""
 timeout_arg=""
 kubeconfig_arg=""
 
+emit_error() {
+  local exit_code="$1"
+  local error_code="$2"
+  local message="$3"
+  local remediation="$4"
+  local docs_url="${5:-}"
+  printf '{"error_code":"%s","message":"%s","remediation":"%s","docs_url":"%s"}\n' \
+    "$error_code" "$message" "$remediation" "$docs_url" >&2
+  exit "$exit_code"
+}
+
+require_value() {
+  local flag="$1"
+  if [[ $# -lt 2 || -z "${2:-}" || "${2:-}" == --* ]]; then
+    emit_error 2 "INVALID_ARGUMENT" "Missing value for ${flag}." \
+      "Run with --help to view usage."
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --cluster)
+      require_value "$1" "${2:-}"
       cluster_ref="$2"; shift 2 ;;
     --region)
+      require_value "$1" "${2:-}"
       region_arg="$2"; shift 2 ;;
     --compartment-id)
+      require_value "$1" "${2:-}"
       compartment_arg="$2"; shift 2 ;;
     --profile)
+      require_value "$1" "${2:-}"
       profile_arg="$2"; shift 2 ;;
     --timeout)
+      require_value "$1" "${2:-}"
       timeout_arg="$2"; shift 2 ;;
     --kubeconfig)
+      require_value "$1" "${2:-}"
       kubeconfig_arg="$2"; shift 2 ;;
     -h|--help)
       echo "usage: $0 --cluster <name-or-ocid> [--region <region>] [--compartment-id <ocid>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>]" >&2
       exit 0 ;;
     *)
-      echo "unknown argument: $1" >&2
-      exit 2 ;;
+      emit_error 2 "UNKNOWN_ARGUMENT" "Unknown argument: $1." \
+        "Run with --help to view usage." ;;
   esac
 done
 
 if [[ -z "$cluster_ref" ]]; then
-  echo "missing required --cluster" >&2
-  exit 2
+  emit_error 2 "MISSING_REQUIRED_ARGUMENT" "Missing required --cluster." \
+    "Provide --cluster <name-or-ocid>."
 fi
 
 if ! command -v oci >/dev/null 2>&1; then
-  echo "oci cli not found" >&2
-  exit 2
+  emit_error 2 "OCI_CLI_NOT_INSTALLED" "OCI CLI not found on PATH." \
+    "Install OCI CLI and retry." \
+    "https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm"
 fi
 
 # Read tenancy and default region from OCI config if present
 config_file="$HOME/.oci/config"
 config_region=""
-config_tenancy=""
 if [[ -f "$config_file" ]]; then
   config_region=$(awk -F= '/^region=/{print $2; exit}' "$config_file" | tr -d ' ')
-  config_tenancy=$(awk -F= '/^tenancy=/{print $2; exit}' "$config_file" | tr -d ' ')
 fi
 
 region="${region_arg:-$config_region}"
 if [[ -z "$region" ]]; then
-  echo "region not provided and not found in config" >&2
-  exit 2
+  emit_error 2 "REGION_NOT_PROVIDED" "Region not provided and not found in OCI config." \
+    "Provide --region <region> or set region in ~/.oci/config."
 fi
 
 # Helper to run oci with region/profile/timeout
@@ -82,32 +106,6 @@ if [[ -n "$profile_arg" ]]; then
 elif [[ -n "${OCI_CLI_PROFILE:-}" ]]; then
   profile_args=(--profile "$OCI_CLI_PROFILE")
 fi
-
-oci_r() {
-  local -a cmd
-  cmd=(oci --region "$region")
-  if [[ ${#profile_args[@]} -gt 0 ]]; then
-    cmd+=("${profile_args[@]}")
-  fi
-  cmd+=("$@")
-  if [[ ${#timeout_prefix[@]} -gt 0 ]]; then
-    cmd=("${timeout_prefix[@]}" "${cmd[@]}")
-  fi
-  if [[ "$use_py_timeout" == "yes" ]]; then
-    python3 - "$timeout_arg" "${cmd[@]}" <<'PY'
-import subprocess, sys
-timeout = float(sys.argv[1])
-cmd = sys.argv[2:]
-try:
-    p = subprocess.run(cmd, timeout=timeout)
-    sys.exit(p.returncode)
-except subprocess.TimeoutExpired:
-    sys.exit(124)
-PY
-  else
-    "${cmd[@]}"
-  fi
-}
 
 oci_json() {
   local out err rc
@@ -206,8 +204,13 @@ else
     kubeconfig_path="${kubeconfig_arg:-$HOME/.kube/config}"
     if [[ -f "$kubeconfig_path" ]]; then
       kube_cluster_id=$(python3 - "$kubeconfig_path" "$cluster_ref" <<'PY'
-import sys, yaml
+import sys
 from pathlib import Path
+try:
+    import yaml
+except Exception:
+    print("")
+    raise SystemExit(0)
 
 path = Path(sys.argv[1])
 name = sys.argv[2]
@@ -220,13 +223,28 @@ except Exception:
 contexts = data.get("contexts", []) or []
 users = {u.get("name"): u.get("user", {}) for u in (data.get("users", []) or [])}
 
-match_user = None
-for c in contexts:
-    cname = c.get("name", "")
-    if name in cname:
-        match_user = (c.get("context", {}) or {}).get("user")
-        if match_user:
-            break
+def pick_user(contexts, target):
+    exact = []
+    exact_ci = []
+    contains = []
+    for c in contexts:
+        cname = c.get("name", "")
+        cuser = (c.get("context", {}) or {}).get("user")
+        if not cuser:
+            continue
+        if cname == target:
+            exact.append((len(cname), cname, cuser))
+        elif cname.lower() == target.lower():
+            exact_ci.append((len(cname), cname, cuser))
+        elif target and target in cname:
+            contains.append((len(cname), cname, cuser))
+    for bucket in (exact, exact_ci, contains):
+        if bucket:
+            bucket.sort()
+            return bucket[0][2]
+    return None
+
+match_user = pick_user(contexts, name)
 
 if not match_user:
     print("")
@@ -247,8 +265,12 @@ PY
       else
         # Fallback: iterate all cluster-ids in kubeconfig and match by name via oci ce cluster get
         mapfile -t kube_cluster_ids < <(python3 - "$kubeconfig_path" <<'PY'
-import yaml, sys
+import sys
 from pathlib import Path
+try:
+    import yaml
+except Exception:
+    sys.exit(0)
 path = Path(sys.argv[1])
 try:
     data = yaml.safe_load(path.read_text())
@@ -346,8 +368,9 @@ PY
 
   # Require a compartment to search by name (avoid tenancy-wide scans).
   if [[ -z "$compartment_arg" && -z "$compartment_ocid" && "$is_ocid" != "yes" ]]; then
-    echo "compartment-id is required when using a cluster name; provide --compartment-id, a cluster OCID, or a kubeconfig with cluster-id" >&2
-    exit 2
+    emit_error 2 "COMPARTMENT_REQUIRED_FOR_CLUSTER_NAME" \
+      "Compartment ID is required when using a cluster name." \
+      "Provide --compartment-id, use cluster OCID, or use kubeconfig that includes --cluster-id."
   fi
 
   comp_to_search="${compartment_arg:-$compartment_ocid}"

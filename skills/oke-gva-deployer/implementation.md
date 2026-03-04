@@ -25,7 +25,7 @@ It does not include Terraform module mappings because the source document is CLI
 ### Discovery Flow
 1. User enters **cluster name** (default `cluster3`).
 2. Cluster OCID is resolved from `~/.kube/config` when possible.
-3. Region defaults are pulled from `/Users/chipinghwang/.oci/config`.
+3. Region defaults are pulled from `~/.oci/config`.
 4. `oci ce cluster get --cluster-id <ocid>` retrieves compartment and K8s version.
 5. VCN list → subnet list → image list are fetched via OCI CLI.
 6. Prompt only for missing values.

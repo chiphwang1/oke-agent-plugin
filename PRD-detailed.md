@@ -30,7 +30,7 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 ### In Scope
 - `/oke-agent-plugin:oke-cluster-generator`
 - `/oke-agent-plugin:oke-troubleshooter`
-- `/oke-agent-plugin:oke-LA-feature-gva-deployer`
+- `/oke-agent-plugin:oke-gva-deployer`
 - OCI CLI and `kubectl` integration for discovery and evidence.
 - Structured error handling and validation.
 

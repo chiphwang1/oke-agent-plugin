@@ -66,7 +66,7 @@ Performs end-to-end diagnosis of OKE incidents by correlating Kubernetes symptom
 /oke-agent-plugin:oke-troubleshooter "customer is indicating poor performance for deployment"
 ```
 
-### `/oke-agent-plugin:oke-LA-feature-gva-deployer`
+### `/oke-agent-plugin:oke-gva-deployer`
 
 Deploys OKE node pools configured with Generic VNIC Attachment (GVA), including secondary VNIC profiles, Application Resource labels, and validation guidance.
 
@@ -84,7 +84,7 @@ Deploys OKE node pools configured with Generic VNIC Attachment (GVA), including 
 **Usage:**
 
 ```bash
-/oke-agent-plugin:oke-LA-feature-gva-deployer
+/oke-agent-plugin:oke-gva-deployer
 ```
 
 ## Project Structure

@@ -12,7 +12,7 @@ Run the guided menu script:
 The menu:
 - Uses the **cluster name** you enter (defaults to `cluster3`).
 - Pulls cluster OCID from `~/.kube/config` if available.
-- Uses region/tenancy defaults from `/Users/chipinghwang/.oci/config`.
+- Uses region/tenancy defaults from `~/.oci/config`.
 - Auto-discovers cluster details (compartment, k8s version).
 - Lists VCNs, then subnets, then OKE images for your k8s version.
 - Prompts only for values it cannot discover.

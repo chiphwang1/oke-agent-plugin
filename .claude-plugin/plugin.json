@@ -1,6 +1,6 @@
 {
   "name": "oke-agent-plugin",
-  "description": "Claude Code plugin for Oracle Kubernetes Engine: Terraform cluster generator, end-to-end troubleshooter, and LA feature enablement.",
+  "description": "Claude Code plugin for Oracle Kubernetes Engine: Terraform cluster generator, end-to-end troubleshooter, and GVA node pool deployment.",
   "version": "0.2.0",
   "author": {
     "name": "chiphwang1",

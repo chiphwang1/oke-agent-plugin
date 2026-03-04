@@ -12,37 +12,63 @@ timeout_arg=""
 kubeconfig_arg=""
 deployment_name=""
 
+emit_error() {
+  local exit_code="$1"
+  local error_code="$2"
+  local message="$3"
+  local remediation="$4"
+  local docs_url="${5:-}"
+  printf '{"error_code":"%s","message":"%s","remediation":"%s","docs_url":"%s"}\n' \
+    "$error_code" "$message" "$remediation" "$docs_url" >&2
+  exit "$exit_code"
+}
+
+require_value() {
+  local flag="$1"
+  if [[ $# -lt 2 || -z "${2:-}" || "${2:-}" == --* ]]; then
+    emit_error 2 "INVALID_ARGUMENT" "Missing value for ${flag}." \
+      "Run with --help to view usage."
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --cluster)
+      require_value "$1" "${2:-}"
       cluster_ref="$2"; shift 2 ;;
     --region)
+      require_value "$1" "${2:-}"
       region_arg="$2"; shift 2 ;;
     --profile)
+      require_value "$1" "${2:-}"
       profile_arg="$2"; shift 2 ;;
     --timeout)
+      require_value "$1" "${2:-}"
       timeout_arg="$2"; shift 2 ;;
     --kubeconfig)
+      require_value "$1" "${2:-}"
       kubeconfig_arg="$2"; shift 2 ;;
     --deployment)
+      require_value "$1" "${2:-}"
       deployment_name="$2"; shift 2 ;;
     -h|--help)
       echo "usage: $0 --cluster <name-or-ocid> [--region <region>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>] [--deployment <name>]" >&2
       exit 0 ;;
     *)
-      echo "unknown argument: $1" >&2
-      exit 2 ;;
+      emit_error 2 "UNKNOWN_ARGUMENT" "Unknown argument: $1." \
+        "Run with --help to view usage." ;;
   esac
 done
 
 if [[ -z "$cluster_ref" ]]; then
-  echo "missing required --cluster" >&2
-  exit 2
+  emit_error 2 "MISSING_REQUIRED_ARGUMENT" "Missing required --cluster." \
+    "Provide --cluster <name-or-ocid>."
 fi
 
 if ! command -v oci >/dev/null 2>&1; then
-  echo "oci cli not found" >&2
-  exit 2
+  emit_error 2 "OCI_CLI_NOT_INSTALLED" "OCI CLI not found on PATH." \
+    "Install OCI CLI and retry." \
+    "https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm"
 fi
 
 # Read defaults from OCI config if present
@@ -54,8 +80,8 @@ fi
 
 region="${region_arg:-$config_region}"
 if [[ -z "$region" ]]; then
-  echo "region not provided and not found in config" >&2
-  exit 2
+  emit_error 2 "REGION_NOT_PROVIDED" "Region not provided and not found in OCI config." \
+    "Provide --region <region> or set region in ~/.oci/config."
 fi
 
 have_timeout="no"
@@ -138,8 +164,13 @@ else
   kubeconfig_path="${kubeconfig_arg:-$HOME/.kube/config}"
   if [[ -f "$kubeconfig_path" ]]; then
     cluster_ocid=$(python3 - "$kubeconfig_path" "$cluster_ref" <<'PY'
-import sys, yaml
+import sys
 from pathlib import Path
+try:
+    import yaml
+except Exception:
+    print("")
+    raise SystemExit(0)
 path = Path(sys.argv[1])
 name = sys.argv[2]
 try:
@@ -151,13 +182,28 @@ except Exception:
 contexts = data.get("contexts", []) or []
 users = {u.get("name"): u.get("user", {}) for u in (data.get("users", []) or [])}
 
-match_user = None
-for c in contexts:
-    cname = c.get("name", "")
-    if name in cname:
-        match_user = (c.get("context", {}) or {}).get("user")
-        if match_user:
-            break
+def pick_user(contexts, target):
+    exact = []
+    exact_ci = []
+    contains = []
+    for c in contexts:
+        cname = c.get("name", "")
+        cuser = (c.get("context", {}) or {}).get("user")
+        if not cuser:
+            continue
+        if cname == target:
+            exact.append((len(cname), cname, cuser))
+        elif cname.lower() == target.lower():
+            exact_ci.append((len(cname), cname, cuser))
+        elif target and target in cname:
+            contains.append((len(cname), cname, cuser))
+    for bucket in (exact, exact_ci, contains):
+        if bucket:
+            bucket.sort()
+            return bucket[0][2]
+    return None
+
+match_user = pick_user(contexts, name)
 
 if not match_user:
     print("")
@@ -176,8 +222,9 @@ PY
 fi
 
 if [[ -z "$cluster_ocid" ]]; then
-  echo "error: could not resolve cluster OCID from kubeconfig; provide cluster OCID" >&2
-  exit 1
+  emit_error 1 "CLUSTER_OCID_NOT_RESOLVED" \
+    "Could not resolve cluster OCID from kubeconfig." \
+    "Provide cluster OCID directly with --cluster <ocid>."
 fi
 
 # Fetch cluster details if possible

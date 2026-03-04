@@ -28,7 +28,7 @@ Helper scripts:
 2. **Auto-Discover Cluster Context**  
    - Ask for **cluster name** if not provided.
    - Resolve **cluster OCID** from `~/.kube/config` when possible.
-   - Pull region/tenancy defaults from `/Users/chipinghwang/.oci/config`.
+   - Pull region/tenancy defaults from `~/.oci/config`.
    - Run:
      ```bash
      bash ../../scripts/oke-discover.sh --cluster <cluster-name-or-ocid> [--region <region>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>] [--deployment <name>]

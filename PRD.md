@@ -37,7 +37,7 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
 - Skill-driven workflows:
   - `/oke-agent-plugin:oke-cluster-generator`
   - `/oke-agent-plugin:oke-troubleshooter`
-  - `/oke-agent-plugin:oke-LA-feature-gva-deployer`
+  - `/oke-agent-plugin:oke-gva-deployer`
 - Structured, multi-phase dialogue and validation.
 - Evidence collection and hypothesis ranking using subagents.
 - CLI-based discovery and validation scripts.
