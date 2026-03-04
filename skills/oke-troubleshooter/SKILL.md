@@ -91,7 +91,7 @@ Helper scripts:
        - `Yes (run now)`
      - Map answer to `enable_logging_mode` and rerun collector if needed.
    - Merge collector output into session evidence:
-     - `lb_ocid`, `logging_status`, `log_findings`, `anomalies`, `fallback_used`
+     - `lb_ocid`, `logging_status`, `logging_status_source`, `log_findings`, `anomalies`, `fallback_used`
    - If collector reports fallback/timeouts, continue with Kubernetes networking evidence and call out OCI visibility gap in the report.
 2. Assemble collector input payload:
    ```json
