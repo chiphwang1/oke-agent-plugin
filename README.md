@@ -123,6 +123,7 @@ oke-agent-plugin/
     ├── gva-menu.sh                          # Interactive GVA node-pool builder
     ├── gva-discover.sh                      # GVA discovery helper (cluster/VCN/subnet/NSG)
     └── oke-discover.sh                      # Troubleshooter cluster discovery helper
+    └── node-doctor-run.sh                   # Node doctor runner via kubectl debug + chroot
 ```
 
 ## Installation

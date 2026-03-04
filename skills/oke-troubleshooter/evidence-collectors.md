@@ -43,6 +43,24 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - `oci compute instance get --instance-id <ocid>`
   - `oci health-check probe-result get --probe-configuration-id <ocid>` (if using health checks)
 - **Normalization tips**: Surface conditions not `True`, kubelet versions, OCI lifecycle state, recent maintenance events.
+- **Advanced: Node Doctor (OKE node deep diagnostics)**
+  - Use when Node Health symptoms indicate node readiness/runtime faults, or when user explicitly requests deep node checks.
+  - Potentially disruptive/privileged; require explicit confirmation per node before execution.
+  - Start with one affected node first, then ask whether to continue on more nodes.
+  - Prompt for debug image each run and execute via helper script:
+    - `bash ../../scripts/node-doctor-run.sh --node <node-name> --image <image-name> [--namespace <ns>]`
+  - Under the hood this runs:
+    1) `kubectl debug node/<node-name> -it --image=<image-name>`
+    2) `chroot /host`
+    3) `sudo /usr/local/bin/node-doctor.sh --check`
+  - If execution is not approved, print commands only and continue other Node Health evidence.
+  - Failure handling:
+    - capture and continue when `kubectl debug` is blocked, image pull fails, `chroot` fails, `sudo` missing, or `/usr/local/bin/node-doctor.sh` not found.
+  - Script output is normalized JSON, including:
+    - `node_doctor_attempted`, `node_doctor_executed`, `node_doctor_node`, `node_doctor_image`
+    - `node_doctor_result` (`pass` | `fail` | `unknown`) and `node_doctor_command_rc`
+    - `node_doctor_findings`, `node_doctor_raw_snippet`, `node_doctor_fallback_reason`
+    - `node_doctor_counts` (`pass`/`fail`/`warn`/`skip`)
 
 ## Networking / CNI / Load Balancer
 - **Kubernetes**

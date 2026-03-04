@@ -53,7 +53,14 @@ Helper scripts:
        "region": "...",
        "domains": [],
        "fallbacks": {"kubectl": false, "oci": false},
-       "evidence": []
+       "evidence": [],
+       "node_doctor": {
+         "enabled": false,
+         "execution_mode": "ask_then_execute",
+         "image": "",
+         "targets": [],
+         "results": []
+       }
      }
      ```
 
@@ -93,6 +100,23 @@ Helper scripts:
    - Merge collector output into session evidence:
      - `lb_ocid`, `logging_status`, `logging_status_source`, `log_findings`, `anomalies`, `fallback_used`
    - If collector reports fallback/timeouts, continue with Kubernetes networking evidence and call out OCI visibility gap in the report.
+   - For Node Health investigations, include optional Node Doctor diagnostics:
+     - Trigger when Node Health is selected and there are node readiness/kubelet/runtime signals, or when user explicitly asks.
+     - Scope starts with one candidate node first, then ask whether to continue to additional nodes.
+     - Ask for debug image each run (`kubectl debug ... --image=<image-name>`). Keep it in session for additional nodes unless user changes it.
+     - Before execution, present the exact sequence and ask explicit confirmation per node:
+       1) `bash ../../scripts/node-doctor-run.sh --node <node-name> --image <image-name>`
+       2) (script executes `kubectl debug` + `chroot /host` + `sudo /usr/local/bin/node-doctor.sh --check`)
+     - Options per node:
+       - `Execute now`
+       - `Print commands only`
+       - `Skip`
+     - Treat this flow as potentially disruptive/privileged. Never auto-run without confirmation.
+     - Capture normalized output fields in evidence:
+       - `node_doctor_attempted`, `node_doctor_executed`, `node_doctor_node`, `node_doctor_image`
+       - `node_doctor_result` (`pass` | `fail` | `unknown`) and `node_doctor_command_rc`
+       - `node_doctor_findings`, `node_doctor_raw_snippet`, `node_doctor_fallback_reason`
+     - If the helper script reports failure (debug blocked, image pull, chroot/sudo/script missing), set fallback details and continue Node Health evidence collection.
 2. Assemble collector input payload:
    ```json
    {
