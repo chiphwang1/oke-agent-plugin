@@ -55,6 +55,8 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - `oci lb load-balancer list --compartment-id <compartment> --region <region> --all --output json | jq -r '.data[] | select((."ip-addresses" // []) | any(."ip-address"=="<lb-ip>")) | .id'` (resolve LB OCID from service external IP)
   - `oci lb load-balancer get --load-balancer-id <ocid> --region <region>`
   - `oci lb load-balancer get --load-balancer-id <ocid> --region <region> --query 'data."access-log"' --output json` (check whether LB access logging is enabled)
+  - `oci logging log-group list --compartment-id <compartment> --region <region> --all --output json` (list candidate log groups)
+  - `oci logging log list --log-group-id <log-group-ocid> --all --query "data[?configuration.source.resource=='<lb-ocid>' && configuration.source.service=='loadbalancer'].[\"display-name\",id,\"is-enabled\",configuration]" --output json` (second check for logging objects tied to LB OCID)
   - `oci logging search search-logs --region <region> --search-query "search \"<log_group_ocid>/<log_ocid>\" | where data.loadBalancerId = '<lb_ocid>' | sort by datetime desc" --time-start <iso-start> --time-end <iso-end>` (when LB logs are enabled)
   - `oci nlb network-load-balancer list --compartment-id <compartment> --region <region> --all --output json | jq -r '.data[] | select((."ip-addresses" // []) | any(."ip-address"=="<lb-ip>")) | .id'` (fallback if classic LB lookup is empty)
   - `oci network nsg list --compartment-id <compartment>`
@@ -65,7 +67,7 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
     - checks access-log status
     - optionally enables logging (with explicit user approval path)
     - extracts log issue signals for ranking
-- **Normalization tips**: Note load balancer lifecycle (`PROVISIONING`, `FAILED`), security list/NSG rules, CNI pod status, service annotations impacting provisioning. Explicitly record LB logging status as `enabled`, `disabled`, or `unknown`.
+- **Normalization tips**: Note load balancer lifecycle (`PROVISIONING`, `FAILED`), security list/NSG rules, CNI pod status, service annotations impacting provisioning. Explicitly record LB logging status as `enabled`, `disabled`, or `unknown`, and include `logging_status_source` showing which check(s) succeeded.
 - **If LB logs are disabled or unknown**: recommend enabling access logs before closing the incident so future RCA has request-level evidence.
   - Offer operator action:
     - `No (report only)`
