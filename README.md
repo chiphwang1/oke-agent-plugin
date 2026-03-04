@@ -1,7 +1,7 @@
 # OKE Agent Plugin
 
 A Claude Code plugin for Oracle Kubernetes Engine (OKE) on Oracle Cloud Infrastructure (OCI).
-Fills the gap in AI-assisted Kubernetes tooling: OKE currently has no equivalent of AKS-MCP or Amazon Q.
+Fills the gap in AI-assisted Kubernetes tooling.
 
 ## Skills
 
