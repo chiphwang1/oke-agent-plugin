@@ -81,6 +81,28 @@ Helper scripts:
        "purpose": "Inspect scheduling events"
      }
      ```
+   - For Networking/LB investigations, always resolve the OCI LB OCID from the Kubernetes Service external IP before calling OCI LB metrics:
+     1) get service external IP via `kubectl get svc ... -o jsonpath`
+     2) map IP to LB OCID via `oci lb load-balancer list ... | jq ...`
+     3) if no match, try NLB list
+     4) if OCI APIs time out, continue with Kubernetes evidence and note the gap explicitly
+   - After resolving LB OCID, check LB access logging status (`data."access-log"`). If logging is disabled or unknown, include a recommendation to enable LB logs for future incidents.
+   - If LB logging is disabled/unknown, ask:
+     - "Enable LB logging now?"
+     - Options: `No (report only)`, `Yes (print command only)`, `Yes (run now)`
+   - For `Yes` paths, collect/confirm required OCI Logging inputs: `log_group_id` and `log_id`.
+   - Only execute write operations after explicit confirmation. For execution, use:
+     ```bash
+     oci lb load-balancer update \
+       --load-balancer-id <lb_ocid> \
+       --region <region> \
+       --access-log '{"isEnabled":true,"logGroupId":"<log_group_id>","logId":"<log_id>"}'
+     ```
+   - If LB logs are enabled and accessible, query recent LB logs (default `last 15m`) and extract issue signals before hypothesis ranking:
+     - elevated `5xx` responses
+     - upstream/backend connection failures or resets
+     - request timeout patterns
+     - latency spikes (p95/p99 style fields where available)
 2. Assemble collector input payload:
    ```json
    {

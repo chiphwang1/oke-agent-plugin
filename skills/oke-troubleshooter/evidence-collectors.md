@@ -47,14 +47,43 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
 ## Networking / CNI / Load Balancer
 - **Kubernetes**
   - `kubectl get svc -n <ns> <service> -o yaml`
+  - `kubectl get svc -n <ns> <service> -o jsonpath='{.status.loadBalancer.ingress[0].ip}'` (capture LB public IP when type is `LoadBalancer`)
   - `kubectl get ingress -n <ns> <ingress> -o yaml`
   - `kubectl describe networkpolicy -n <ns>`
   - `kubectl get pods -n kube-system -l k8s-app=cilium-agent` (or corresponding CNI)
 - **OCI**
-  - `oci network load-balancer get --load-balancer-id <ocid>`
+  - `oci lb load-balancer list --compartment-id <compartment> --region <region> --all --output json | jq -r '.data[] | select((."ip-addresses" // []) | any(."ip-address"=="<lb-ip>")) | .id'` (resolve LB OCID from service external IP)
+  - `oci lb load-balancer get --load-balancer-id <ocid> --region <region>`
+  - `oci lb load-balancer get --load-balancer-id <ocid> --region <region> --query 'data."access-log"' --output json` (check whether LB access logging is enabled)
+  - `oci logging search search-logs --region <region> --search-query "search \"<log_group_ocid>/<log_ocid>\" | where data.loadBalancerId = '<lb_ocid>' | sort by datetime desc" --time-start <iso-start> --time-end <iso-end>` (when LB logs are enabled)
+  - `oci nlb network-load-balancer list --compartment-id <compartment> --region <region> --all --output json | jq -r '.data[] | select((."ip-addresses" // []) | any(."ip-address"=="<lb-ip>")) | .id'` (fallback if classic LB lookup is empty)
   - `oci network nsg list --compartment-id <compartment>`
   - `oci network subnet get --subnet-id <ocid>`
-- **Normalization tips**: Note load balancer lifecycle (`PROVISIONING`, `FAILED`), security list/NSG rules, CNI pod status, service annotations impacting provisioning.
+- **Normalization tips**: Note load balancer lifecycle (`PROVISIONING`, `FAILED`), security list/NSG rules, CNI pod status, service annotations impacting provisioning. Explicitly record LB logging status as `enabled`, `disabled`, or `unknown`.
+- **If LB logs are disabled or unknown**: recommend enabling access logs before closing the incident so future RCA has request-level evidence.
+  - Offer operator action:
+    - `No (report only)`
+    - `Yes (print enable command)`
+    - `Yes (execute enable command now)`
+  - Enable command template:
+    ```bash
+    oci lb load-balancer update \
+      --load-balancer-id <lb_ocid> \
+      --region <region> \
+      --access-log '{"isEnabled":true,"logGroupId":"<log_group_id>","logId":"<log_id>"}'
+    ```
+  - Post-check:
+    ```bash
+    oci lb load-balancer get \
+      --load-balancer-id <lb_ocid> \
+      --region <region> \
+      --query 'data."access-log"' \
+      --output json
+    ```
+- **If LB logs are enabled**: summarize concrete issue signals from log lines:
+  - 5xx rate and top failing paths/backends
+  - timeout/reset/error signatures
+  - highest observed latency fields in the selected window
 
 ## Application Performance
 - **Kubernetes**
