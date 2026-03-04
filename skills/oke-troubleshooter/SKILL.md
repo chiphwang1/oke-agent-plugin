@@ -52,6 +52,12 @@ Helper scripts:
        "compartment_ocid": "...",
        "region": "...",
        "domains": [],
+       "dependency_map": {
+         "entrypoint": "",
+         "hops": [],
+         "critical_path": [],
+         "latency_budget_ms": {}
+       },
        "fallbacks": {"kubectl": false, "oci": false},
        "evidence": [],
        "node_doctor": {
@@ -72,14 +78,41 @@ Helper scripts:
    - Confirm the list.
    - Add or remove domains.
    - Provide additional focus (specific pod, service, node pool, PVC, IAM entity).
-3. Capture clarifying answers (from the table's questions) and store them in session state (e.g., `POD_NAME`, `SERVICE_NAME`, `DEPLOYMENT_NAME`, `LABEL_SELECTOR`, `BASELINE_LATENCY`).
+3. For application latency symptoms, model dependency context before evidence collection:
+   - Capture request entrypoint (Ingress/API/Job), target deployment, and downstream services (internal and external).
+   - Mark critical-path dependencies vs optional/background calls.
+   - Capture baseline latency and per-hop budget when known.
+4. Capture clarifying answers (from the table's questions) and store them in session state (e.g., `POD_NAME`, `SERVICE_NAME`, `DEPLOYMENT_NAME`, `LABEL_SELECTOR`, `BASELINE_LATENCY`, `DEPENDENCY_MAP`).
 
 ---
 
-## Phase 2 — Evidence Collection
+## Phase 2 — Dependency Path Modeling
+1. Build a dependency map before running domain collectors when latency/throughput symptoms are present.
+2. Dependency map structure:
+   ```json
+   {
+     "entrypoint": "ingress/payments",
+     "hops": [
+       {"from": "ingress/payments", "to": "deployment/payments-api", "protocol": "HTTP"},
+       {"from": "deployment/payments-api", "to": "svc/orders", "protocol": "gRPC"},
+       {"from": "deployment/payments-api", "to": "svc/redis", "protocol": "TCP"}
+     ],
+     "critical_path": ["ingress/payments->deployment/payments-api", "deployment/payments-api->svc/orders"],
+     "latency_budget_ms": {
+       "end_to_end_p99": 500,
+       "ingress/payments->deployment/payments-api": 120,
+       "deployment/payments-api->svc/orders": 220
+     }
+   }
+   ```
+3. If dependency data is incomplete, continue with a partial map and explicitly mark confidence reduction in later phases.
+
+---
+
+## Phase 3 — Evidence Collection
 1. For each selected domain:
    - Look up required commands in `evidence-collectors.md`.
-   - Build command batches with placeholders filled (namespace, resource names, compartment OCID, time window).  
+   - Build command batches with placeholders filled (namespace, resource names, compartment OCID, time window, and dependency hop identifiers when present).  
    - **Auto-run read-only evidence commands without prompting** when tools are available.  
    - Only ask for confirmation before **potentially disruptive** actions (restarts, scaling, drains).
    - Example command item:
@@ -125,6 +158,12 @@ Helper scripts:
      "namespace": "...",
      "time_window": "...",
      "selectors": {"pod": "...", "service": "...", "deployment": "...", "label": "..."},
+     "dependency_map": {
+       "entrypoint": "...",
+       "hops": [],
+       "critical_path": [],
+       "latency_budget_ms": {}
+     },
      "fallbacks": {"kubectl": false, "oci": true},
      "compartment_ocid": "..."
    }
@@ -136,30 +175,32 @@ Helper scripts:
 
 ---
 
-## Phase 3 — Hypothesis Ranking
+## Phase 4 — Hypothesis Ranking
 1. Construct analyst payload containing:
    ```json
    {
      "symptom": "...",
      "domains": [...],
+     "dependency_map": {...},
      "evidence": [...],
-     "fallbacks": {"kubectl": false, "oci": true}
+      "fallbacks": {"kubectl": false, "oci": true}
    }
    ```
 2. Invoke `oke-hypothesis-analyst`.  
-   - If analyst reports missing evidence, offer to rerun Phase 2 with expanded commands or additional domains.  
-   - Ensure each hypothesis includes score, evidence bullets, remediation commands, and prevention guidance.
+   - If analyst reports missing evidence, offer to rerun Phase 3 with expanded commands or additional domains.  
+   - Ensure each hypothesis includes score, bottleneck hop attribution, evidence bullets, remediation commands, and prevention guidance.
 3. Validate that evidence quotes reference actual snippets collected. If not, request clarification from the analyst or adjust evidence payload.
 
 ---
 
-## Phase 4 — Report & Next Steps
+## Phase 5 — Report & Next Steps
 1. Present a structured report:
    - Table of top hypotheses with scores.  
    - Highlight confidence level (e.g., `High`, `Medium`, `Low` based on score thresholds).  
+   - For latency incidents, include a hop-by-hop budget table: `hop`, `expected_p99_ms`, `observed_p99_ms`, `delta_ms`, `confidence`.
    - Remediation commands rendered in fenced code blocks, prefixed with comments where necessary.  
    - Prevention recommendations as concise bullet points.
-2. Call out any limitations: missing tooling, commands that failed, domains not yet explored.
+2. Call out any limitations: missing tooling, commands that failed, domains not yet explored, and missing dependency telemetry.
 3. Offer next actions:
    - Rerun for another namespace/resource.
    - Deep-dive into IAM or quota analysis.
@@ -185,5 +226,51 @@ Helper scripts:
 - `/oke-troubleshooter "lb service has no IP us-phoenix-1"`  
 - `/oke-troubleshooter "cluster api timing out"`  
 - `/oke-troubleshooter "customer is indicating poor performance for deployment"`  
+
+## Latency Walkthrough (Dependency-Aware)
+Use this pattern when the incident is "deployment is slow" and the deployment depends on other services.
+
+1. **Input Example**
+   - Symptom: `"payments API p99 jumped from 350ms to 1.8s"`
+   - Namespace: `prod`
+   - Deployment: `payments-api`
+   - Time window: `1h`
+2. **Dependency Map Example**
+   ```json
+   {
+     "entrypoint": "ingress/payments",
+     "hops": [
+       {"from": "ingress/payments", "to": "deployment/payments-api", "protocol": "HTTP"},
+       {"from": "deployment/payments-api", "to": "svc/orders", "protocol": "gRPC"},
+       {"from": "deployment/payments-api", "to": "svc/redis", "protocol": "TCP"}
+     ],
+     "critical_path": [
+       "ingress/payments->deployment/payments-api",
+       "deployment/payments-api->svc/orders"
+     ],
+     "latency_budget_ms": {
+       "end_to_end_p99": 500,
+       "ingress/payments->deployment/payments-api": 120,
+       "deployment/payments-api->svc/orders": 220,
+       "deployment/payments-api->svc/redis": 80
+     }
+   }
+   ```
+3. **Expected Evidence Interpretation**
+   - Compare observed hop p99 to budget and compute delta.
+   - Identify the largest over-budget hop on critical path first.
+   - Validate with both client-side and server-side evidence when possible.
+4. **Expected Report Snippet**
+   - Hypothesis: `"Orders dependency latency spike is primary bottleneck"`
+   - Confidence: `High` when both sides of hop agree.
+   - Budget table:
+
+     | Hop | Expected p99 (ms) | Observed p99 (ms) | Delta (ms) | Confidence |
+     |-----|-------------------|-------------------|------------|------------|
+     | ingress/payments->payments-api | 120 | 140 | +20 | Medium |
+     | payments-api->orders | 220 | 980 | +760 | High |
+     | payments-api->redis | 80 | 95 | +15 | Medium |
+
+   - Remediation should target `payments-api->orders` first, then re-measure end-to-end p99.
 
 The skill should deliver actionable insight even when only partial data is available.

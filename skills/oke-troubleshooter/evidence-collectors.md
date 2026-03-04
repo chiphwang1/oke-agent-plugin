@@ -50,7 +50,7 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - Prompt for debug image each run and execute via helper script:
     - `bash ../../scripts/node-doctor-run.sh --node <node-name> --image <image-name> [--namespace <ns>]`
   - Under the hood this runs:
-    1) `kubectl debug node/<node-name> -it --image=<image-name>`
+    1) `kubectl -n <ns> debug node/<node-name> --image=<image-name>`
     2) `chroot /host`
     3) `sudo /usr/local/bin/node-doctor.sh --check`
   - If execution is not approved, print commands only and continue other Node Health evidence.
@@ -124,6 +124,25 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - `oci monitoring metric-data summarize-metrics-data --namespace oci_lb --query-text "BackendLatency[1m]{resourceId = '<lb-ocid>'}.p99()" --resolution 1m --start-time <iso-start> --end-time <iso-end>`
   - `oci monitoring alarm-status-summary list --compartment-id <compartment>` (identify triggered performance alarms)
 - **Normalization tips**: Compare current replica count vs. desired, highlight recent rollouts, surface CPU/memory saturation, p95/p99 latency spikes, and note absent autoscaling policies.
+
+## Dependency Path
+- **Purpose**
+  - Attribute latency to the correct hop when a deployment depends on one or more downstream services.
+  - Distinguish downstream bottleneck from retry amplification or in-cluster network issues.
+- **Kubernetes**
+  - `kubectl get svc -n <ns> <service> -o yaml` (per downstream service)
+  - `kubectl get endpoints -n <ns> <service> -o yaml` (or EndpointSlice equivalent)
+  - `kubectl describe svc -n <ns> <service>`
+  - `kubectl logs -n <ns> deployment/<deployment> --tail=300 | egrep -i "timeout|deadline|connection reset|upstream|retry|503|504"`
+- **OCI**
+  - `oci monitoring metric-data summarize-metrics-data --namespace oci_lb --query-text "BackendLatency[1m]{resourceId = '<lb-ocid>'}.p99()" --resolution 1m --start-time <iso-start> --end-time <iso-end>`
+  - `oci monitoring metric-data summarize-metrics-data --namespace oci_computeagent --query-text "CpuUtilization[1m]{resourceId = '<instance-ocid>'}.mean()" --resolution 1m --start-time <iso-start> --end-time <iso-end>`
+  - `oci monitoring alarm-status-summary list --compartment-id <compartment>`
+- **Normalization tips**:
+  - Emit per-hop records with fields: `hop_id`, `from`, `to`, `direction`, `latency_p95_ms`, `latency_p99_ms`, `error_rate`, `timeout_count`, `retry_count`.
+  - Compare `observed_p99_ms` against `latency_budget_ms` when available and compute `delta_ms`.
+  - Mark evidence gaps clearly when only client-side or only server-side telemetry exists for a hop.
+  - Prioritize the highest p99 over-budget hop in findings.
 
 ## Storage / CSI
 - **Kubernetes**
