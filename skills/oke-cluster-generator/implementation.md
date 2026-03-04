@@ -16,6 +16,10 @@ The skill definition lives in `skills/oke-cluster-generator/SKILL.md`, with supp
 | Preflight script | Tenancy OCID, home region, compartment discovery | `scripts/preflight-check.sh` |
 | CIDR validator | Detects overlap across VCN / Pod / Service CIDRs | `scripts/validate-cidr.sh` |
 
+## Recent Updates
+- Removed non-standard frontmatter fields to align with skill validation rules.
+- Added brief TOCs to reference/template files for faster navigation.
+
 ## Execution Flow
 
 1. **Pre-flight Discovery**
