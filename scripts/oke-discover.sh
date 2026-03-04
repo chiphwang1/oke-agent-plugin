@@ -3,13 +3,14 @@ set -euo pipefail
 
 # Discover OKE cluster context for troubleshooting.
 # Usage:
-#   ./scripts/oke-discover.sh --cluster <name-or-ocid> [--region <region>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>]
+#   ./scripts/oke-discover.sh --cluster <name-or-ocid> [--region <region>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>] [--deployment <name>]
 
 cluster_ref=""
 region_arg=""
 profile_arg=""
 timeout_arg=""
 kubeconfig_arg=""
+deployment_name=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -23,8 +24,10 @@ while [[ $# -gt 0 ]]; do
       timeout_arg="$2"; shift 2 ;;
     --kubeconfig)
       kubeconfig_arg="$2"; shift 2 ;;
+    --deployment)
+      deployment_name="$2"; shift 2 ;;
     -h|--help)
-      echo "usage: $0 --cluster <name-or-ocid> [--region <region>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>]" >&2
+      echo "usage: $0 --cluster <name-or-ocid> [--region <region>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>] [--deployment <name>]" >&2
       exit 0 ;;
     *)
       echo "unknown argument: $1" >&2
@@ -212,6 +215,24 @@ else
   cluster_name="$cluster_ref"
 fi
 
+# Optional: try to resolve deployment namespace if kubectl is available
+deployment_namespace=""
+deployment_namespaces=""
+if [[ -n "$deployment_name" ]]; then
+  if command -v kubectl >/dev/null 2>&1; then
+    deployment_namespaces=$(kubectl get deploy -A --no-headers 2>/dev/null | awk -v d="$deployment_name" '$2==d {print $1}' | paste -sd "," -)
+    if [[ -n "$deployment_namespaces" ]]; then
+      if [[ "$deployment_namespaces" == *,* ]]; then
+        deployment_namespace=""
+      else
+        deployment_namespace="$deployment_namespaces"
+      fi
+    fi
+  else
+    echo "warning: kubectl not found; cannot resolve deployment namespace" >&2
+  fi
+fi
+
 python3 - <<PY
 import json
 print(json.dumps({
@@ -221,6 +242,11 @@ print(json.dumps({
     "kubernetes_version": "${cluster_k8s}",
     "compartment_id": "${compartment_ocid}",
     "region": "${region}"
+  },
+  "deployment": {
+    "name": "${deployment_name}",
+    "namespace": "${deployment_namespace}",
+    "namespaces": "${deployment_namespaces}"
   }
 }, indent=2))
 PY

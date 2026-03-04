@@ -31,9 +31,9 @@ Helper scripts:
    - Pull region/tenancy defaults from `/Users/chipinghwang/.oci/config`.
    - Run:
      ```bash
-     bash ../../scripts/oke-discover.sh --cluster <cluster-name-or-ocid> [--region <region>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>]
+     bash ../../scripts/oke-discover.sh --cluster <cluster-name-or-ocid> [--region <region>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>] [--deployment <name>]
      ```
-   - Use the JSON output to auto-populate: `cluster_ocid`, `compartment_ocid`, `region`, `kubernetes_version`.
+   - Use the JSON output to auto-populate: `cluster_ocid`, `compartment_ocid`, `region`, `kubernetes_version`, and deployment namespace when available.
    - Prompt only for fields that remain missing after discovery.
 3. **Confirm Context**  
    - Ask for missing essentials: namespace, target Deployment/Service name, desired time window (`15m`, `1h`, default `1h`), impact level (prod/non-prod).
