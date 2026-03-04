@@ -28,6 +28,11 @@ Helper scripts:
    - Extract namespace hints (`-n`, `namespace:`) and resource names when present.
 2. **Auto-Discover Cluster Context**  
    - Ask for **cluster name** if not provided.
+   - First list kubeconfig contexts to identify managed clusters and current context:
+     ```bash
+     kubectl config get-contexts
+     ```
+   - Use this output to suggest likely cluster/context names before prompting for manual input.
    - Resolve **cluster OCID** from `~/.kube/config` when possible.
    - Pull region/tenancy defaults from `~/.oci/config`.
    - Run:
