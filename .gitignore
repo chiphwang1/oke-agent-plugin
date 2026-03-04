@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Office temporary lock files
+~$*
+
+# Editor/IDE local files
+.vscode/
+.idea/
