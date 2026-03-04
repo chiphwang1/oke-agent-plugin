@@ -165,6 +165,7 @@ Manually validate the plugin with the following flows:
 ## References
 
 - [terraform-oci-oke](https://github.com/oracle-terraform-modules/terraform-oci-oke) — OKE Terraform module (variable authority)
+- [oci-hpc-oke](https://github.com/oracle-quickstart/oci-hpc-oke) — HPC OKE quickstart reference
 - [oke-terraform-stack-builder](https://github.com/chiphwang1/oke-terraform-stack-builder) — Skill 1 reference implementation
 - [K8sGPT](https://github.com/k8sgpt-ai/k8sgpt) — Analyzer patterns for Kubernetes troubleshooting
 - [HolmesGPT](https://github.com/robusta-dev/holmesgpt) — Symptom → evidence → hypothesis workflow inspiration
