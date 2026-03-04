@@ -36,7 +36,7 @@ Helper scripts:
    - Use the JSON output to auto-populate: `cluster_ocid`, `compartment_ocid`, `region`, `kubernetes_version`, and deployment namespace when available.
    - Prompt only for fields that remain missing after discovery.
 3. **Confirm Context**  
-   - Ask for missing essentials: namespace, target Deployment/Service name, desired time window (`15m`, `1h`, default `1h`), impact level (prod/non-prod).
+   - Ask only for missing essentials after discovery: namespace, target Deployment/Service name, desired time window (`15m`, `1h`, default `1h`), impact level (prod/non-prod).
 4. **Tool Availability Checks**  
    - Run `kubectl version --client` and `oci --version`.  
    - Record `KUBECTL_AVAILABLE`/`OCI_AVAILABLE` booleans. If a CLI is missing, inform the user that evidence will be partial and continue with available tools.
@@ -72,7 +72,9 @@ Helper scripts:
 1. For each selected domain:
    - Look up required commands in `evidence-collectors.md`.
    - Build command batches with placeholders filled (namespace, resource names, compartment OCID, time window).  
-     Example command item:
+   - **Auto-run read-only evidence commands without prompting** when tools are available.  
+   - Only ask for confirmation before **potentially disruptive** actions (restarts, scaling, drains).
+   - Example command item:
      ```json
      {
        "cmd": "kubectl describe pod trainer-0 -n ml-team",
