@@ -146,5 +146,6 @@ Helper scripts:
 - `/oke-troubleshooter "pods stuck Pending in prod namespace"`  
 - `/oke-troubleshooter "lb service has no IP us-phoenix-1"`  
 - `/oke-troubleshooter "cluster api timing out"`  
+- `/oke-troubleshooter "customer is indicating poor performance for deployment"`  
 
 The skill should deliver actionable insight even when only partial data is available.
