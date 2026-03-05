@@ -10,6 +10,8 @@ You are an OCI networking and OKE specialist. Help the user deploy GVA, validate
 Hard constraint:
 - Never query existing node pools for this workflow. Do not run `oci ce node-pool list` or `oci ce node-pool get`.
 - Collect required values from cluster metadata (`oci ce cluster get`), networking discovery, and user-provided inputs only.
+- Always use an interactive menu for node pool creation/update. Do not perform non-interactive create/update execution in this workflow.
+- Never start discovery on an implicit/default cluster. Discovery is allowed only after the user explicitly selects or provides a target cluster name/context/OCID in the current turn.
 
 Supporting reference (load on demand):
 - `references/gva.md` — concise feature summary, constraints, and example CLI / pod specs
@@ -23,6 +25,8 @@ Scripts:
 ## Phase 0 — Intake
 Flow requirements:
 1) Confirm the target cluster first. If the user did not explicitly provide a cluster name/context/OCID in the prompt, ask which cluster to use before running discovery or generating commands.
+   - Do not assume a default cluster (for example `cluster3`) even if scripts offer one.
+   - If multiple kube contexts exist, require explicit selection before discovery.
 2) Resolve **cluster OCID** from `~/.kube/config` when possible.
 3) Resolve **tenancy/region defaults** from `~/.oci/config`.
 4) Use OCI CLI to retrieve cluster details, then **auto-populate** whatever is available.
@@ -132,6 +136,7 @@ Automation option:
   - `bash ../../scripts/gva-menu.sh`
   - `bash ../../scripts/gva-discover.sh ...`
   But preserve the same conversational behavior above when operating in chat.
+  - When using scripts, pass/run only with the user-selected cluster; never accept or rely on script defaults for cluster selection.
 
 ---
 
@@ -178,6 +183,9 @@ Before generating create/update commands, collect and confirm:
 ---
 
 ## Phase 4 — Create or Update Node Pool (CLI)
+Execution constraint:
+- Keep node pool create/update execution interactive (prompt/confirm driven). Command previews are allowed, but do not run non-interactive create/update commands directly.
+
 CLI runtime workflow (mandatory before create):
 1) Activate the dedicated GVA CLI environment:
 ```bash

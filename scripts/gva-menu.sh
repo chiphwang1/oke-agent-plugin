@@ -49,10 +49,13 @@ fi
 say "GVA Node Pool Builder (OKE)"
 say "Answer the prompts to generate an OCI CLI command."
 
-cluster_name=$(ask "Cluster name (default: cluster3): ")
-if [[ -z "$cluster_name" ]]; then
-  cluster_name="cluster3"
-fi
+cluster_name=""
+while [[ -z "$cluster_name" ]]; do
+  cluster_name=$(ask "Cluster name (required, no default): ")
+  if [[ -z "$cluster_name" ]]; then
+    say "Cluster name is required before discovery can run."
+  fi
+done
 
 # Pull defaults from OCI config
 config_file="$HOME/.oci/config"
