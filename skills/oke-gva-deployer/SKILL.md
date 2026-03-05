@@ -83,6 +83,7 @@ Interaction rules:
 - For each menu, allow either:
   - Option key selection (for example `a`, `b`, `1`, `2`), or
   - Direct custom value typed by the user without a special keyword.
+- Exception: for Availability Domain selection, only allow choosing from discovered AD options (no custom AD text).
 - Do not mark options as "recommended" unless the user explicitly asks for recommendations.
 - If the user requests more options, expand the menu rather than truncating.
 - Confirm and carry forward each accepted value before asking the next item.
@@ -98,19 +99,22 @@ Menu order:
 8) GVA secondary subnet
 9) NSG selection
 10) one or more `applicationResource` labels
-11) `ipCount` value(s) per resource label (1-16 each)
+11) single `ipCount` value (1-16) applied to all selected resource labels
 12) image selection
 
 Data presentation rules:
 - VCN menu must list all discovered VCNs in the target compartment (name + CIDR + OCID or selectable key).
 - Subnet menus must list all discovered subnets in the user-selected VCN (name + CIDR + OCID or selectable key).
-- Image menus must list all OKE images matching the cluster Kubernetes version.
+- Image menus must list only OKE images that both:
+  - match the cluster Kubernetes version, and
+  - are compatible with the selected node shape architecture/family (for example, exclude `aarch64` for x86 shapes).
 - NSG menus must include all discovered NSGs and a "none" option.
+- Availability Domain menu must list discovered ADs and accept only option-key multi-select input (`a,b,c` style); reject custom AD values.
 
 Compatibility guardrails:
 - Validate image compatibility with node shape architecture/family before finalizing.
 - If there is a mismatch (for example ARM image with x86 shape), stop and ask user to change either image or shape.
-- For multiple `applicationResource` labels, require matching cardinality for `ipCount` entries and build one GVA profile per label.
+- For multiple `applicationResource` labels, build one GVA profile per label and apply the same user-selected `ipCount` to each profile.
 
 Automation option:
 - If user asks to use scripts, you may run:
@@ -154,7 +158,7 @@ Before generating create/update commands, collect and confirm:
 - One or more `applicationResource` labels (one profile per label)
 - GVA secondary subnet per profile
 - NSG IDs per profile
-- `ipCount` per profile (1-16 each; count must align with resource labels)
+- One `ipCount` value (1-16) applied to each generated profile
 - Secondary VNIC display name (recommended)
 - Whether additional GVA profiles are required
 - Optional node pool parameters (tags, labels, boot volume, SSH key, etc.)
