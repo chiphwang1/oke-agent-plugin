@@ -113,6 +113,7 @@ Data presentation rules:
   - are compatible with the selected node shape architecture/family (for example, exclude `aarch64` for x86 shapes).
 - NSG menus must include all discovered NSGs and a "none" option.
 - Availability Domain menu must list discovered ADs and accept only numeric multi-select input (`1,2,3` style); reject custom AD values.
+- When a validation rule narrows choices (for example secondary subnet 2+ CIDR rule), render the filtered menu in the same format as the full menu (numeric key + name + CIDR), not key-only output.
 
 Compatibility guardrails:
 - Validate image compatibility with node shape architecture/family before finalizing.
