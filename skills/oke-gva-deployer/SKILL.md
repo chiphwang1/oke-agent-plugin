@@ -120,7 +120,7 @@ Compatibility guardrails:
 - Validate image compatibility with node shape architecture/family before finalizing.
 - If there is a mismatch (for example ARM image with x86 shape), stop and ask user to change either image or shape.
 - Build one profile per secondary VNIC entry collected in step 9/10.
-- After each secondary subnet selection, verify the subnet has two or more CIDR entries; if not, reject it and prompt for another subnet.
+- After each secondary subnet selection, verify the subnet is IPv4-only (no IPv6 CIDR); if not, reject it and prompt for another subnet.
 
 Automation option:
 - If user asks to use scripts, you may run:
@@ -173,6 +173,22 @@ Before generating create/update commands, collect and confirm:
 ---
 
 ## Phase 4 — Create or Update Node Pool (CLI)
+CLI runtime workflow (mandatory before create):
+1) Activate the dedicated GVA CLI environment:
+```bash
+source /Users/chipinghwang/Desktop/projects/codex_oke_plugin/oke-agent-plugin/gva-cli/bin/activate
+```
+2) Confirm CLI version supports GVA flags:
+```bash
+oci --version
+oci ce node-pool create --help | rg 'secondary-vnics|cni-type'
+```
+3) If missing, install local preview wheel from the skill workspace:
+```bash
+python -m pip install --no-deps --force-reinstall /Users/chipinghwang/Desktop/projects/codex_oke_plugin/oke-agent-plugin/gva-cli/oci_cli-3.65.2+preview.1.1355-py2.py3-none-any.whl
+```
+4) Re-check help output and only then run create.
+
 If the user uses OCI CLI, generate a command using the prepared profiles. Use the template below and replace placeholders.
 
 ```bash
@@ -189,6 +205,8 @@ oci ce node-pool create \
   --node-source-details '{"sourceType":"IMAGE","imageId":"<image_ocid>"}' \
   --secondary-vnics '<secondary_vnics_json>'
 ```
+
+Use availability domains discovered from IAM for the tenant (for example `GrCh:US-ASHBURN-AD-1`), not guessed aliases.
 
 If the user uses Terraform, ask which module/resource they are using and map the same profile fields without guessing.
 
