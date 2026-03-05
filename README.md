@@ -73,13 +73,19 @@ Deploys OKE node pools configured with Generic VNIC Attachment (GVA), including 
 **Highlights:**
 - Auto-discovers cluster context from kubeconfig and OCI config
 - Lists VCNs and subnets for selection
-- Lists OKE images for the cluster’s Kubernetes version
+- Lists OKE images for the cluster’s Kubernetes version and selected node-shape compatibility
+- Uses one-by-one numeric menus, including repeat prompts for additional secondary VNIC profiles
+- Validates secondary VNIC subnets are IPv4-only before create
 - Generates a ready-to-run `oci ce node-pool create` command
 - Provides a test Deployment manifest for GVA validation
 
 **Prerequisites:**
 - OCI CLI installed and configured
 - `kubectl` configured for the target cluster
+- GVA preview CLI workflow:
+  - `source /Users/chipinghwang/Desktop/projects/codex_oke_plugin/oke-agent-plugin/gva-cli/bin/activate`
+  - If needed, install local preview wheel:
+    - `python -m pip install --no-deps --force-reinstall /Users/chipinghwang/Desktop/projects/codex_oke_plugin/oke-agent-plugin/gva-cli/oci_cli-3.65.2+preview.1.1355-py2.py3-none-any.whl`
 
 **Usage:**
 
@@ -96,7 +102,8 @@ oke-agent-plugin/
 ├── agents/
 │   ├── oke-evidence-collector.md           # Haiku subagent for command execution
 │   ├── oke-hypothesis-analyst.md           # Sonnet subagent for hypothesis scoring
-│   └── oke-lb-log-collector.md             # Haiku subagent for LB logging evidence
+│   ├── oke-lb-log-collector.md             # Haiku subagent for LB logging evidence
+│   └── oke-repo-committer.md               # Haiku subagent for scoped commit/push workflow
 ├── settings.json                           # Claude Code settings
 ├── skills/
 │   ├── oke-cluster-generator/
