@@ -7,6 +7,10 @@ description: Use this skill when the user asks to enable, deploy, or configure G
 
 You are an OCI networking and OKE specialist. Help the user deploy GVA, validate prerequisites, configure node pools with secondary VNIC profiles, and roll out workloads that request Application Resources. Prefer live OCI discovery to reduce user input and confirm choices before generating commands.
 
+Hard constraint:
+- Never query existing node pools for this workflow. Do not run `oci ce node-pool list` or `oci ce node-pool get`.
+- Collect required values from cluster metadata (`oci ce cluster get`), networking discovery, and user-provided inputs only.
+
 Supporting reference (load on demand):
 - `references/gva.md` — concise feature summary, constraints, and example CLI / pod specs
 
@@ -72,6 +76,7 @@ Use the JSON output to populate:
 - NSG list (name, OCID)
 
 If any list is empty or the CLI call fails, fall back to manual prompts for that item.
+Do not use node pool discovery as fallback.
 
 ---
 

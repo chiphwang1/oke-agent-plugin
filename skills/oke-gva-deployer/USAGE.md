@@ -36,6 +36,12 @@ If you can’t run the menu, follow this sequence:
 7. **Verify**
    - `kubectl describe node <node_name>` for GVA extended resources and taint.
 
+This is the preferred fast-path discovery because it scopes queries to the selected VCN and avoids broad compartment-wide subnet discovery.
+
+Constraint:
+- Do not query existing node pools (`oci ce node-pool list/get`) as part of this skill flow.
+- Build the new node pool from cluster metadata, VCN/subnet discovery, image options, and explicit user inputs.
+
 ## Inputs You Still Need to Provide
 Even with discovery, you must choose:
 - Node pool name
@@ -44,6 +50,12 @@ Even with discovery, you must choose:
 - Node placement subnet (from VCN list)
 - GVA VNIC profiles (subnet, applicationResource, ipCount)
 - Image (from the menu list)
+
+Always confirm additional GVA variables:
+- NSG IDs per GVA profile
+- Secondary VNIC display name (recommended)
+- Whether additional profiles are needed
+- Optional node-pool parameters (tags, labels, boot size, SSH key)
 
 ## Test Deployment
 The menu prints a test Deployment manifest. Replace `<image>` with a real image and apply:
