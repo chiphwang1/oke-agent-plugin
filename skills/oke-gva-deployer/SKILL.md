@@ -81,9 +81,10 @@ Use a one-at-a-time menu flow in chat. Do not ask for multiple unrelated fields 
 Interaction rules:
 - Ask exactly one configuration item per turn.
 - For each menu, allow either:
-  - Option key selection (for example `a`, `b`, `1`, `2`), or
+  - Numeric option selection (for example `1`, `2`, `3`), or
   - Direct custom value typed by the user without a special keyword.
 - Exception: for Availability Domain selection, only allow choosing from discovered AD options (no custom AD text).
+- Prefer numeric menus consistently across all steps.
 - Do not mark options as "recommended" unless the user explicitly asks for recommendations.
 - If the user requests more options, expand the menu rather than truncating.
 - Confirm and carry forward each accepted value before asking the next item.
@@ -96,11 +97,13 @@ Menu order:
 5) node count
 6) Availability Domains (allow one, two, or all three; comma-separated)
 7) primary node subnet
-8) GVA secondary subnet
-9) NSG selection
-10) one or more `applicationResource` labels
-11) single `ipCount` value (1-16) applied to all selected resource labels
-12) image selection
+8) image selection (shape-compatible only)
+9) Secondary VNIC profile fields:
+   - `applicationResource` label
+   - GVA secondary subnet
+   - NSG selection (`none` allowed)
+   - `ipCount` (1-16)
+10) Ask: "Add another secondary VNIC profile?" and repeat step 9 until user says no.
 
 Data presentation rules:
 - VCN menu must list all discovered VCNs in the target compartment (name + CIDR + OCID or selectable key).
@@ -109,12 +112,13 @@ Data presentation rules:
   - match the cluster Kubernetes version, and
   - are compatible with the selected node shape architecture/family (for example, exclude `aarch64` for x86 shapes).
 - NSG menus must include all discovered NSGs and a "none" option.
-- Availability Domain menu must list discovered ADs and accept only option-key multi-select input (`a,b,c` style); reject custom AD values.
+- Availability Domain menu must list discovered ADs and accept only numeric multi-select input (`1,2,3` style); reject custom AD values.
 
 Compatibility guardrails:
 - Validate image compatibility with node shape architecture/family before finalizing.
 - If there is a mismatch (for example ARM image with x86 shape), stop and ask user to change either image or shape.
-- For multiple `applicationResource` labels, build one GVA profile per label and apply the same user-selected `ipCount` to each profile.
+- Build one profile per secondary VNIC entry collected in step 9/10.
+- After each secondary subnet selection, verify the subnet has two or more CIDR entries; if not, reject it and prompt for another subnet.
 
 Automation option:
 - If user asks to use scripts, you may run:
@@ -155,12 +159,13 @@ Before generating create/update commands, collect and confirm:
 - Availability Domain(s) (one or more)
 - Primary node subnet (placement subnet)
 - Image OCID matching cluster Kubernetes version
-- One or more `applicationResource` labels (one profile per label)
+- Secondary VNIC profile list (one or more)
+- `applicationResource` label per profile
 - GVA secondary subnet per profile
 - NSG IDs per profile
-- One `ipCount` value (1-16) applied to each generated profile
+- `ipCount` per profile (1-16)
 - Secondary VNIC display name (recommended)
-- Whether additional GVA profiles are required
+- Whether additional GVA profiles are required (explicit yes/no loop)
 - Optional node pool parameters (tags, labels, boot volume, SSH key, etc.)
 
 ---
