@@ -114,6 +114,7 @@ Data presentation rules:
 - NSG menus must include all discovered NSGs and a "none" option.
 - Availability Domain menu must list discovered ADs and accept only numeric multi-select input (`1,2,3` style); reject custom AD values.
 - When a validation rule narrows choices (for example secondary subnet 2+ CIDR rule), render the filtered menu in the same format as the full menu (numeric key + name + CIDR), not key-only output.
+- For every filtered menu, re-number options contiguously from `1..N` (do not reuse original indices like `4,10,11`).
 
 Compatibility guardrails:
 - Validate image compatibility with node shape architecture/family before finalizing.
