@@ -8,6 +8,15 @@ ask() {
   printf "%s" "$var"
 }
 
+read_lines_into_array() {
+  local array_name="$1"
+  local line=""
+  eval "$array_name=()"
+  while IFS= read -r line; do
+    eval "$array_name+=(\"\$line\")"
+  done
+}
+
 select_from_list() {
   local prompt="$1"; shift
   local items=("$@")
@@ -182,7 +191,7 @@ PY
     region="$region_from_discovery"
   fi
 
-  mapfile -t subnet_lines < <(python3 - <<'PY'
+  read_lines_into_array subnet_lines < <(python3 - <<'PY'
 import json,sys
 try:
     d=json.loads(sys.stdin.read())
@@ -197,7 +206,7 @@ for s in d.get('subnets',[]):
 PY
   <<<"$discovery_json")
 
-  mapfile -t nsg_lines < <(python3 - <<'PY'
+  read_lines_into_array nsg_lines < <(python3 - <<'PY'
 import json,sys
 try:
     d=json.loads(sys.stdin.read())
@@ -226,7 +235,7 @@ vcn_id=""
 if [[ "$oci_available" == "yes" && -n "$compartment_ocid" ]]; then
   vcn_json=$(oci network vcn list --compartment-id "$compartment_ocid" --region "$region" --query 'data[*].{name:"display-name",id:id,cidr:"cidr-block"}' --output json 2>/dev/null || true)
   if [[ -n "$vcn_json" && "$vcn_json" != "[]" ]]; then
-    mapfile -t vcn_lines < <(python3 - <<'PY'
+    read_lines_into_array vcn_lines < <(python3 - <<'PY'
 import json,sys
 try:
     d=json.loads(sys.stdin.read())
@@ -257,7 +266,7 @@ if [[ -n "$vcn_id" ]]; then
   subnet_lines=()
   subnet_json=$(oci network subnet list --compartment-id "$compartment_ocid" --vcn-id "$vcn_id" --region "$region" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json 2>/dev/null || true)
   if [[ -n "$subnet_json" && "$subnet_json" != "[]" ]]; then
-    mapfile -t subnet_lines < <(python3 - <<'PY'
+    read_lines_into_array subnet_lines < <(python3 - <<'PY'
 import json,sys
 try:
     d=json.loads(sys.stdin.read())
@@ -318,7 +327,7 @@ image_ocid=""
 if [[ "$oci_available" == "yes" && -n "$k8s_version" ]]; then
   img_json=$(oci ce node-pool-options get --node-pool-option-id all --region "$region" --query 'data.sources[*].{"image":"image-id","name":"source-name"}' --output json 2>/dev/null || true)
   if [[ -n "$img_json" && "$img_json" != "[]" ]]; then
-    mapfile -t img_lines < <(python3 - <<'PY'
+    read_lines_into_array img_lines < <(python3 - <<'PY'
 import json,sys,re
 try:
     d=json.loads(sys.stdin.read())

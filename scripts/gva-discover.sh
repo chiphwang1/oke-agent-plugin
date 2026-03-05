@@ -11,6 +11,8 @@ compartment_arg=""
 profile_arg=""
 timeout_arg=""
 kubeconfig_arg=""
+cache_ttl_arg="0"
+cache_dir_arg=""
 
 emit_error() {
   local exit_code="$1"
@@ -29,6 +31,15 @@ require_value() {
     emit_error 2 "INVALID_ARGUMENT" "Missing value for ${flag}." \
       "Run with --help to view usage."
   fi
+}
+
+read_lines_into_array() {
+  local array_name="$1"
+  local line=""
+  eval "$array_name=()"
+  while IFS= read -r line; do
+    eval "$array_name+=(\"\$line\")"
+  done
 }
 
 while [[ $# -gt 0 ]]; do
@@ -51,8 +62,14 @@ while [[ $# -gt 0 ]]; do
     --kubeconfig)
       require_value "$1" "${2:-}"
       kubeconfig_arg="$2"; shift 2 ;;
+    --cache-ttl)
+      require_value "$1" "${2:-}"
+      cache_ttl_arg="$2"; shift 2 ;;
+    --cache-dir)
+      require_value "$1" "${2:-}"
+      cache_dir_arg="$2"; shift 2 ;;
     -h|--help)
-      echo "usage: $0 --cluster <name-or-ocid> [--region <region>] [--compartment-id <ocid>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>]" >&2
+      echo "usage: $0 --cluster <name-or-ocid> [--region <region>] [--compartment-id <ocid>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>] [--cache-ttl <seconds>] [--cache-dir <path>]" >&2
       exit 0 ;;
     *)
       emit_error 2 "UNKNOWN_ARGUMENT" "Unknown argument: $1." \
@@ -82,6 +99,42 @@ region="${region_arg:-$config_region}"
 if [[ -z "$region" ]]; then
   emit_error 2 "REGION_NOT_PROVIDED" "Region not provided and not found in OCI config." \
     "Provide --region <region> or set region in ~/.oci/config."
+fi
+
+if ! [[ "$cache_ttl_arg" =~ ^[0-9]+$ ]]; then
+  emit_error 2 "INVALID_ARGUMENT" "--cache-ttl must be a non-negative integer." \
+    "Use --cache-ttl <seconds>."
+fi
+
+cache_dir="${cache_dir_arg:-${TMPDIR:-/tmp}/gva-discover-cache}"
+cache_enabled="no"
+cache_file=""
+if [[ "$cache_ttl_arg" -gt 0 ]]; then
+  mkdir -p "$cache_dir"
+  cache_key=$(python3 - "$cluster_ref" "$region" "$compartment_arg" "$profile_arg" <<'PY'
+import hashlib
+import sys
+raw = "|".join(sys.argv[1:])
+print(hashlib.sha256(raw.encode("utf-8")).hexdigest())
+PY
+  )
+  cache_file="${cache_dir}/${cache_key}.json"
+  cache_enabled="yes"
+  if [[ -f "$cache_file" ]]; then
+    if python3 - "$cache_file" "$cache_ttl_arg" <<'PY'
+import os
+import sys
+import time
+path = sys.argv[1]
+ttl = int(sys.argv[2])
+age = time.time() - os.path.getmtime(path)
+sys.exit(0 if age <= ttl else 1)
+PY
+    then
+      cat "$cache_file"
+      exit 0
+    fi
+  fi
 fi
 
 # Helper to run oci with region/profile/timeout
@@ -184,6 +237,7 @@ cluster_ocid=""
 cluster_name=""
 cluster_k8s=""
 compartment_ocid=""
+cluster_vcn_id=""
 
 is_ocid="no"
 if [[ "$cluster_ref" == ocid1.* ]]; then
@@ -192,13 +246,14 @@ fi
 
 if [[ "$is_ocid" == "yes" ]]; then
   cluster_ocid="$cluster_ref"
-  cluster_json=$(oci_json ce cluster get --cluster-id "$cluster_ocid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id"}' --output json || true)
+  cluster_json=$(oci_json ce cluster get --cluster-id "$cluster_ocid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id",vcn:"vcn-id"}' --output json || true)
   if [[ -z "$cluster_json" || "$cluster_json" == "{}" ]]; then
     echo "warning: failed to fetch cluster details for $cluster_ocid (check auth/region/profile)" >&2
   else
     cluster_name=$(printf '%s' "$cluster_json" | json_get_field name)
     cluster_k8s=$(printf '%s' "$cluster_json" | json_get_field k8s)
     compartment_ocid=$(printf '%s' "$cluster_json" | json_get_field compartment)
+    cluster_vcn_id=$(printf '%s' "$cluster_json" | json_get_field vcn)
   fi
 else
   # Try to resolve cluster OCID from kubeconfig if no compartment was provided.
@@ -266,7 +321,7 @@ PY
         is_ocid="yes"
       else
         # Fallback: iterate all cluster-ids in kubeconfig and match by name via oci ce cluster get
-        mapfile -t kube_cluster_ids < <(python3 - "$kubeconfig_path" <<'PY'
+        read_lines_into_array kube_cluster_ids < <(python3 - "$kubeconfig_path" <<'PY'
 import sys
 from pathlib import Path
 try:
@@ -291,7 +346,7 @@ PY
         )
         if [[ ${#kube_cluster_ids[@]} -gt 0 ]]; then
           for cid in "${kube_cluster_ids[@]}"; do
-            match_json=$(oci_json ce cluster get --cluster-id "$cid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id"}' --output json || true)
+            match_json=$(oci_json ce cluster get --cluster-id "$cid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id",vcn:"vcn-id"}' --output json || true)
             if [[ -n "$match_json" && "$match_json" != "{}" ]]; then
               match_name=$(printf '%s' "$match_json" | json_get_field name)
               if [[ "$match_name" == "$cluster_ref" ]]; then
@@ -299,6 +354,7 @@ PY
                 cluster_name="$match_name"
                 cluster_k8s=$(printf '%s' "$match_json" | json_get_field k8s)
                 compartment_ocid=$(printf '%s' "$match_json" | json_get_field compartment)
+                cluster_vcn_id=$(printf '%s' "$match_json" | json_get_field vcn)
                 is_ocid="yes"
                 break
               fi
@@ -310,13 +366,14 @@ PY
   fi
 
   if [[ "$is_ocid" == "yes" ]]; then
-    cluster_json=$(oci_json ce cluster get --cluster-id "$cluster_ocid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id"}' --output json || true)
+    cluster_json=$(oci_json ce cluster get --cluster-id "$cluster_ocid" --query 'data.{name:"name",k8s:"kubernetes-version",compartment:"compartment-id",vcn:"vcn-id"}' --output json || true)
     if [[ -z "$cluster_json" || "$cluster_json" == "{}" ]]; then
       echo "warning: failed to fetch cluster details for $cluster_ocid (check auth/region/profile)" >&2
     else
       cluster_name=$(printf '%s' "$cluster_json" | json_get_field name)
       cluster_k8s=$(printf '%s' "$cluster_json" | json_get_field k8s)
       compartment_ocid=$(printf '%s' "$cluster_json" | json_get_field compartment)
+      cluster_vcn_id=$(printf '%s' "$cluster_json" | json_get_field vcn)
     fi
   fi
 
@@ -366,12 +423,39 @@ fi
 subnets_json="[]"
 nsGs_json="[]"
 if [[ -n "$compartment_ocid" ]]; then
-  subnets_json=$(oci_json network subnet list --compartment-id "$compartment_ocid" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json || true)
+  subnets_tmp="$(mktemp)"
+  nsgs_tmp="$(mktemp)"
+
+  if [[ -n "$cluster_vcn_id" ]]; then
+    (
+      oci_json network subnet list --compartment-id "$compartment_ocid" --vcn-id "$cluster_vcn_id" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json || true
+    ) >"$subnets_tmp" &
+    subnets_pid=$!
+    (
+      oci_json network nsg list --compartment-id "$compartment_ocid" --vcn-id "$cluster_vcn_id" --query 'data[*].{"name":"display-name","id":"id"}' --output json || true
+    ) >"$nsgs_tmp" &
+    nsgs_pid=$!
+  else
+    (
+      oci_json network subnet list --compartment-id "$compartment_ocid" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json || true
+    ) >"$subnets_tmp" &
+    subnets_pid=$!
+    (
+      oci_json network nsg list --compartment-id "$compartment_ocid" --query 'data[*].{"name":"display-name","id":"id"}' --output json || true
+    ) >"$nsgs_tmp" &
+    nsgs_pid=$!
+  fi
+
+  wait "$subnets_pid" || true
+  wait "$nsgs_pid" || true
+  subnets_json="$(cat "$subnets_tmp")"
+  nsGs_json="$(cat "$nsgs_tmp")"
+  rm -f "$subnets_tmp" "$nsgs_tmp"
+
   if [[ -z "$subnets_json" ]]; then
     subnets_json="[]"
     echo "warning: failed to list subnets for compartment $compartment_ocid" >&2
   fi
-  nsGs_json=$(oci_json network nsg list --compartment-id "$compartment_ocid" --query 'data[*].{"name":"display-name","id":"id"}' --output json || true)
   if [[ -z "$nsGs_json" ]]; then
     nsGs_json="[]"
     echo "warning: failed to list NSGs for compartment $compartment_ocid" >&2
@@ -379,7 +463,7 @@ if [[ -n "$compartment_ocid" ]]; then
 fi
 
 # Output consolidated JSON
-python3 - <<PY
+result_json=$(python3 - <<PY
 import json
 out = {
   "cluster": {
@@ -387,10 +471,18 @@ out = {
     "id": "${cluster_ocid}",
     "kubernetes_version": "${cluster_k8s}",
     "compartment_id": "${compartment_ocid}",
-    "region": "${region}"
+    "region": "${region}",
+    "vcn_id": "${cluster_vcn_id}"
   },
   "subnets": json.loads('''${subnets_json:-[]}''') if '''${subnets_json:-}'''.strip() else [],
   "nsgs": json.loads('''${nsGs_json:-[]}''') if '''${nsGs_json:-}'''.strip() else []
 }
 print(json.dumps(out, indent=2))
 PY
+)
+
+if [[ "$cache_enabled" == "yes" && -n "$cache_file" ]]; then
+  printf "%s\n" "$result_json" > "$cache_file"
+fi
+
+printf "%s\n" "$result_json"
