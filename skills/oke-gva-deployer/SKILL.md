@@ -88,20 +88,22 @@ Interaction rules:
 - Confirm and carry forward each accepted value before asking the next item.
 
 Menu order:
-1) `node_pool_name`
-2) `node_shape`
-3) shape config (OCPUs + memory) when shape is Flex
-4) node count
-5) Availability Domains (allow one, two, or all three; comma-separated)
-6) primary node subnet
-7) GVA secondary subnet
-8) NSG selection
-9) one or more `applicationResource` labels
-10) `ipCount` value(s) per resource label (1-16 each)
-11) image selection
+1) VCN selection
+2) `node_pool_name`
+3) `node_shape`
+4) shape config (OCPUs + memory) when shape is Flex
+5) node count
+6) Availability Domains (allow one, two, or all three; comma-separated)
+7) primary node subnet
+8) GVA secondary subnet
+9) NSG selection
+10) one or more `applicationResource` labels
+11) `ipCount` value(s) per resource label (1-16 each)
+12) image selection
 
 Data presentation rules:
-- Subnet menus must list all discovered subnets in the chosen VCN (name + CIDR + OCID or selectable key).
+- VCN menu must list all discovered VCNs in the target compartment (name + CIDR + OCID or selectable key).
+- Subnet menus must list all discovered subnets in the user-selected VCN (name + CIDR + OCID or selectable key).
 - Image menus must list all OKE images matching the cluster Kubernetes version.
 - NSG menus must include all discovered NSGs and a "none" option.
 
@@ -139,6 +141,7 @@ Before generating create/update commands, collect and confirm:
 - Cluster OCID
 - Region
 - Compartment OCID
+- VCN OCID
 - Kubernetes version
 - Node pool name (must be explicitly provided; do not auto-finalize a default name without user confirmation)
 - Node shape
