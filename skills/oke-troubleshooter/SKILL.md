@@ -40,13 +40,17 @@ Helper scripts:
      kubectl config get-contexts
      ```
    - Use this output to suggest likely cluster/context names before prompting for manual input.
+   - Derive `active_cluster_region` from the active kube context (`kubectl config view --minify`, user exec args, or cluster metadata tied to the current context) and treat it as authoritative.
    - Resolve **cluster OCID** from `~/.kube/config` when possible.
-   - Pull region/tenancy defaults from `~/.oci/config`.
+   - Use tenancy defaults from `~/.oci/config` only for auth/profile hints, not for region selection.
    - Run:
      ```bash
      bash ../../scripts/oke-discover.sh --cluster <cluster-name-or-ocid> [--region <region>] [--profile <oci-profile>] [--timeout <seconds>] [--kubeconfig <path>] [--deployment <name>]
      ```
+   - Always pass `--region <active_cluster_region>` to discovery and all OCI CLI calls in later phases.
+   - Never use implicit OCI CLI region or fallback/default region.
    - Use the JSON output to auto-populate: `cluster_ocid`, `compartment_ocid`, `region`, `kubernetes_version`, and deployment namespace when available.
+   - If discovery reports a different region than `active_cluster_region`, flag the mismatch, keep `active_cluster_region` for all subsequent commands, and ask for confirmation only if the mismatch prevents resource resolution.
    - Prompt only for fields that remain missing after discovery.
    - **Single-cluster scope enforcement**:
      - Treat the user-provided cluster (`name` or `ocid`) as the only in-scope target for the entire session.
