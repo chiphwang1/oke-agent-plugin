@@ -121,8 +121,8 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - `kubectl logs -n <ns> deployment/<deployment> --tail=200` (if structured logging enabled)
 - **OCI**
   - `oci monitoring metric-data summarize-metrics-data --namespace oci_computeagent --query-text "CpuUtilization[1m]{resourceId = '<instance-ocid>'}.mean()" --resolution 1m --start-time <iso-start> --end-time <iso-end>`
-  - `oci monitoring metric-data summarize-metrics-data --namespace oci_lb --query-text "BackendLatency[1m]{resourceId = '<lb-ocid>'}.p99()" --resolution 1m --start-time <iso-start> --end-time <iso-end>`
-  - `oci monitoring alarm-status-summary list --compartment-id <compartment>` (identify triggered performance alarms)
+  - `oci monitoring metric-data summarize-metrics-data --namespace oci_lb --query-text "BackendLatency[1m]{resourceId = \"<lb-ocid>\"}.percentile(0.99)" --resolution 1m --start-time <iso-start> --end-time <iso-end>`
+  - `oci monitoring alarm-status list-alarms-status --compartment-id <compartment> --status FIRING --all` (identify triggered performance alarms)
 - **Normalization tips**: Compare current replica count vs. desired, highlight recent rollouts, surface CPU/memory saturation, p95/p99 latency spikes, and note absent autoscaling policies.
 
 ## Dependency Path
@@ -135,9 +135,9 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - `kubectl describe svc -n <ns> <service>`
   - `kubectl logs -n <ns> deployment/<deployment> --tail=300 | egrep -i "timeout|deadline|connection reset|upstream|retry|503|504"`
 - **OCI**
-  - `oci monitoring metric-data summarize-metrics-data --namespace oci_lb --query-text "BackendLatency[1m]{resourceId = '<lb-ocid>'}.p99()" --resolution 1m --start-time <iso-start> --end-time <iso-end>`
+  - `oci monitoring metric-data summarize-metrics-data --namespace oci_lb --query-text "BackendLatency[1m]{resourceId = \"<lb-ocid>\"}.percentile(0.99)" --resolution 1m --start-time <iso-start> --end-time <iso-end>`
   - `oci monitoring metric-data summarize-metrics-data --namespace oci_computeagent --query-text "CpuUtilization[1m]{resourceId = '<instance-ocid>'}.mean()" --resolution 1m --start-time <iso-start> --end-time <iso-end>`
-  - `oci monitoring alarm-status-summary list --compartment-id <compartment>`
+  - `oci monitoring alarm-status list-alarms-status --compartment-id <compartment> --status FIRING --all`
 - **Normalization tips**:
   - Emit per-hop records with fields: `hop_id`, `from`, `to`, `direction`, `latency_p95_ms`, `latency_p99_ms`, `error_rate`, `timeout_count`, `retry_count`.
   - Compare `observed_p99_ms` against `latency_budget_ms` when available and compute `delta_ms`.
@@ -180,7 +180,7 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
 - **OCI**
   - `oci limits resource-availability list --compartment-id <compartment> --service-name <service>`
   - `oci limits quota get --compartment-id <compartment> --quota-id <ocid>`
-  - `oci monitoring alarm-status-summary list --compartment-id <compartment>`
+  - `oci monitoring alarm-status list-alarms-status --compartment-id <compartment> --status FIRING --all`
 - **Normalization tips**: Present remaining vs. used quota, active alarms, recent throttling metrics.
 
 ---
