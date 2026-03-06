@@ -157,7 +157,7 @@ Helper scripts:
    - For Node Health investigations, include optional Node Doctor diagnostics:
      - Trigger when Node Health is selected and there are node readiness/kubelet/runtime signals, or when user explicitly asks.
      - Scope starts with one candidate node first, then ask whether to continue to additional nodes.
-     - Ask for debug image each run (`kubectl debug ... --image=<image-name>`). Keep it in session for additional nodes unless user changes it.
+    - Default debug image to `docker.io/library/ubuntu` each run (`kubectl debug ... --image=<image-name>`), and allow user override. Keep the selected image in session for additional nodes unless user changes it.
      - Before execution, present the exact sequence and ask explicit confirmation per node:
        1) `bash ../../scripts/node-doctor-run.sh --node <node-name> --image <image-name>`
        2) (script executes `kubectl debug` + `chroot /host` + `sudo /usr/local/bin/node-doctor.sh --check`)

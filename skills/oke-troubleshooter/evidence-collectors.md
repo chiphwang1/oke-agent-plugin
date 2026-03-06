@@ -47,8 +47,8 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - Use when Node Health symptoms indicate node readiness/runtime faults, or when user explicitly requests deep node checks.
   - Potentially disruptive/privileged; require explicit confirmation per node before execution.
   - Start with one affected node first, then ask whether to continue on more nodes.
-  - Prompt for debug image each run and execute via helper script:
-    - `bash ../../scripts/node-doctor-run.sh --node <node-name> --image <image-name> [--namespace <ns>]`
+  - Use default debug image `docker.io/library/ubuntu` each run (allow user override) and execute via helper script:
+    - `bash ../../scripts/node-doctor-run.sh --node <node-name> --image docker.io/library/ubuntu [--namespace <ns>]`
   - Under the hood this runs:
     1) `kubectl -n <ns> debug node/<node-name> --image=<image-name>`
     2) `chroot /host`
