@@ -84,6 +84,30 @@ cmd_rc=$?
 set -e
 
 pod_name="$(printf "%s\n" "$raw_out" | sed -n 's/^Creating debugging pod \([^ ]*\) .*/\1/p' | head -n 1)"
+
+# When kubectl debug cannot attach, execution output may only exist in pod logs.
+if [[ -n "$pod_name" ]]; then
+  # Wait for the debug pod to finish so node-doctor output is complete.
+  for _ in $(seq 1 120); do
+    set +e
+    pod_phase="$(kubectl -n "$namespace" get pod "$pod_name" -o jsonpath='{.status.phase}' 2>/dev/null)"
+    phase_rc=$?
+    set -e
+    if [[ $phase_rc -eq 0 && ( "$pod_phase" == "Succeeded" || "$pod_phase" == "Failed" ) ]]; then
+      break
+    fi
+    sleep 1
+  done
+
+  set +e
+  pod_logs="$(kubectl -n "$namespace" logs "$pod_name" --all-containers=true 2>&1)"
+  logs_rc=$?
+  set -e
+  if [[ $logs_rc -eq 0 && -n "$pod_logs" ]]; then
+    raw_out="${raw_out}"$'\n'"${pod_logs}"
+  fi
+fi
+
 cleanup_attempted="false"
 cleanup_message=""
 
@@ -133,8 +157,21 @@ for l in lines:
     if "Signal(s) generated" in l:
         signals_line = l.strip()
 
-executed = "Running node doctor..." in raw or checks_line != ""
-if cmd_rc != 0:
+has_check_lines = any(
+    l.startswith(("PASS ", "FAIL ", "WARN ", "SKIP "))
+    for l in lines
+)
+executed = (
+    "Running node doctor..." in raw
+    or "NODE DOCTOR REPORT" in raw
+    or checks_line != ""
+    or has_check_lines
+)
+
+if not executed:
+    result = "unknown"
+    fallback_reason = "node doctor checks did not execute or produced no parsable output"
+elif cmd_rc != 0:
     result = "unknown"
     fallback_reason = f"node doctor command exited with code {cmd_rc}"
 elif fail_count > 0:
