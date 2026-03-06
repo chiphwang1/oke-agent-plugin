@@ -48,6 +48,11 @@ Helper scripts:
      ```
    - Use the JSON output to auto-populate: `cluster_ocid`, `compartment_ocid`, `region`, `kubernetes_version`, and deployment namespace when available.
    - Prompt only for fields that remain missing after discovery.
+   - **Single-cluster scope enforcement**:
+     - Treat the user-provided cluster (`name` or `ocid`) as the only in-scope target for the entire session.
+     - Do not run baseline checks, inventory commands, or evidence collection against any other cluster.
+     - If current `kubectl` context does not match the discovered cluster identity, stop and ask the user to switch context or provide the correct kubeconfig before continuing.
+     - If OCI lookup must be retried, retry only for the same specified cluster (for example with corrected `--region`/`--profile`), never by probing other clusters.
 3. **Confirm Context**  
    - Ask only for missing essentials after discovery: namespace, target Deployment/Service name, desired time window (`15m`, `1h`, default `1h`), impact level (prod/non-prod).
 4. **Tool Availability Checks**  
