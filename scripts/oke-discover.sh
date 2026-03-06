@@ -78,12 +78,6 @@ if [[ -f "$config_file" ]]; then
   config_region=$(awk -F= '/^region=/{print $2; exit}' "$config_file" | tr -d ' ')
 fi
 
-region="${region_arg:-$config_region}"
-if [[ -z "$region" ]]; then
-  emit_error 2 "REGION_NOT_PROVIDED" "Region not provided and not found in OCI config." \
-    "Provide --region <region> or set region in ~/.oci/config."
-fi
-
 have_timeout="no"
 if command -v timeout >/dev/null 2>&1; then
   have_timeout="yes"
@@ -251,6 +245,23 @@ if [[ -z "$cluster_ocid" ]]; then
   emit_error 1 "CLUSTER_OCID_NOT_RESOLVED" \
     "Could not resolve cluster OCID from kubeconfig." \
     "Provide cluster OCID directly with --cluster <ocid>."
+fi
+
+region_from_cluster_ocid="$(python3 - "$cluster_ocid" <<'PY'
+import re
+import sys
+
+ocid = sys.argv[1].strip()
+match = re.match(r"^ocid1\.cluster\.oc1\.([a-z0-9-]+)\..+$", ocid)
+print(match.group(1) if match else "")
+PY
+)"
+
+region="${region_arg:-${region_from_cluster_ocid:-$config_region}}"
+if [[ -z "$region" ]]; then
+  emit_error 2 "REGION_NOT_PROVIDED" \
+    "Region not provided and could not be inferred from cluster OCID or OCI config." \
+    "Provide --region <region> or set region in ~/.oci/config."
 fi
 
 # Fetch cluster details if possible
