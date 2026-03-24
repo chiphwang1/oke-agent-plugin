@@ -12,6 +12,18 @@ ask() {
   printf "%s" "$var"
 }
 
+ask_required() {
+  local prompt="$1"
+  local value=""
+  while [[ -z "$value" ]]; do
+    value=$(ask "$prompt")
+    if [[ -z "$value" ]]; then
+      say "A value is required."
+    fi
+  done
+  printf "%s" "$value"
+}
+
 read_lines_into_array() {
   local array_name="$1"
   local line=""
@@ -22,16 +34,24 @@ read_lines_into_array() {
 }
 
 select_from_list() {
-  local prompt="$1"; shift
+  local prompt="$1"
+  local allow_manual="$2"
+  shift 2
   local items=("$@")
+  local options=("${items[@]}")
   local choice=""
+  if [[ "$allow_manual" == "yes" ]]; then
+    options+=("Manual entry")
+  fi
   say "$prompt"
-  select choice in "${items[@]}" "Manual entry"; do
-    if [[ "$choice" == "Manual entry" ]]; then
+  select choice in "${options[@]}"; do
+    if [[ "$allow_manual" == "yes" && "$choice" == "Manual entry" ]]; then
       choice=""
       break
     elif [[ -n "$choice" ]]; then
       break
+    else
+      say "Choose one of the listed options."
     fi
   done
   printf "%s" "$choice"
@@ -69,27 +89,13 @@ if ! command -v oci >/dev/null 2>&1; then
 fi
 
 say "GVA Node Pool Builder (OKE)"
+say "This wizard collects fresh values for every new node pool creation."
+say "It does not reuse prior drafts or previous mutable node-pool settings."
+say "Saved JSON payloads are ignored for new node pool creation."
 say "Answer the prompts to generate an OCI CLI command."
 
-cluster_name=""
-while [[ -z "$cluster_name" ]]; do
-  cluster_name=$(ask "Cluster name (required, no default): ")
-  if [[ -z "$cluster_name" ]]; then
-    say "Cluster name is required before discovery can run."
-  fi
-done
-
-# Pull defaults from OCI config
-config_file="$HOME/.oci/config"
-config_region=""
-if [[ -f "$config_file" ]]; then
-  config_region=$(awk -F= '/^region=/{print $2; exit}' "$config_file" | tr -d ' ')
-fi
-
-region=$(ask "Region (default: ${config_region:-none}): ")
-if [[ -z "$region" && -n "$config_region" ]]; then
-  region="$config_region"
-fi
+cluster_name=$(ask_required "Cluster name (required, no default): ")
+region=$(ask_required "Region for the selected cluster (e.g., us-ashburn-1): ")
 
 profile_name=$(ask "OCI CLI profile (optional): ")
 
@@ -155,7 +161,7 @@ PY
 fi
 
 if [[ -z "$cluster_ocid" ]]; then
-  cluster_ocid=$(ask "Cluster OCID (not found in kubeconfig): ")
+  cluster_ocid=$(ask_required "Cluster OCID (not found in kubeconfig): ")
 else
   say "Detected cluster OCID from kubeconfig."
 fi
@@ -254,15 +260,40 @@ PY
   )
 fi
 
-if [[ -z "$region" ]]; then
-  region=$(ask "Region (e.g., us-ashburn-1): ")
-fi
-
 if [[ -z "$compartment_ocid" ]]; then
-  compartment_ocid=$(ask "Compartment OCID: ")
+  compartment_ocid=$(ask_required "Compartment OCID: ")
 fi
 
-ad=$(ask "Availability Domain (e.g., GrCh:US-ASHBURN-AD-1): ")
+config_file="$HOME/.oci/config"
+tenancy_ocid=""
+if [[ -f "$config_file" ]]; then
+  tenancy_ocid=$(awk -F= '/^tenancy=/{print $2; exit}' "$config_file" | tr -d ' ')
+fi
+
+ad_lines=()
+if [[ "$oci_available" == "yes" ]]; then
+  ad_compartment="${tenancy_ocid:-$compartment_ocid}"
+  ad_json=$(oci iam availability-domain list --compartment-id "$ad_compartment" --region "$region" --query 'data[*].name' --output json 2>/dev/null || true)
+  if [[ -n "$ad_json" && "$ad_json" != "[]" ]]; then
+    read_lines_into_array ad_lines < <(python3 - <<'PY'
+import json,sys
+try:
+    data=json.loads(sys.stdin.read())
+except Exception:
+    data=[]
+for item in data:
+    if item:
+        print(item)
+PY
+    <<<"$ad_json")
+  fi
+fi
+
+if [[ ${#ad_lines[@]} -gt 0 ]]; then
+  ad=$(select_from_list "Select Availability Domain:" "no" "${ad_lines[@]}")
+else
+  ad=$(ask_required "Availability Domain (e.g., GrCh:US-ASHBURN-AD-1): ")
+fi
 
 vcn_id=""
 if [[ "$oci_available" == "yes" && -n "$compartment_ocid" ]]; then
@@ -285,14 +316,14 @@ PY
   fi
 fi
 
-if [[ ${#vcn_lines[@]} -eq 1 ]]; then
-  vcn_id=$(printf "%s" "${vcn_lines[0]}" | cut -d'|' -f3 | xargs)
-  say "Auto-selected VCN: ${vcn_lines[0]}"
-elif [[ ${#vcn_lines[@]} -gt 0 ]]; then
-  selection=$(select_from_list "Select VCN:" "${vcn_lines[@]}")
+if [[ ${#vcn_lines[@]} -gt 0 ]]; then
+  selection=$(select_from_list "Select VCN:" "yes" "${vcn_lines[@]}")
   if [[ -n "$selection" ]]; then
     vcn_id=$(printf "%s" "$selection" | cut -d'|' -f3 | xargs)
   fi
+fi
+if [[ -z "$vcn_id" ]]; then
+  vcn_id=$(ask_required "VCN OCID: ")
 fi
 
 if [[ -n "$vcn_id" ]]; then
@@ -320,16 +351,16 @@ fi
 
 primary_subnet=""
 if [[ ${#subnet_lines[@]} -gt 0 ]]; then
-  selection=$(select_from_list "Select primary subnet (node placement):" "${subnet_lines[@]}")
+  selection=$(select_from_list "Select primary subnet (node placement):" "yes" "${subnet_lines[@]}")
   if [[ -n "$selection" ]]; then
     primary_subnet=$(line_field "$selection" 4)
   fi
 fi
 if [[ -z "$primary_subnet" ]]; then
-  primary_subnet=$(ask "Primary subnet OCID (node placement subnet): ")
+  primary_subnet=$(ask_required "Primary subnet OCID (node placement subnet): ")
 fi
 
-node_pool_name=$(ask "Node pool name: ")
+node_pool_name=$(ask_required "Node pool name: ")
 
 k8s_version=""
 if [[ -n "$cluster_k8s" ]]; then
@@ -337,10 +368,10 @@ if [[ -n "$cluster_k8s" ]]; then
   say "Using cluster Kubernetes version: $k8s_version"
 fi
 if [[ -z "$k8s_version" ]]; then
-  k8s_version=$(ask "Kubernetes version (e.g., v1.34.1): ")
+  k8s_version=$(ask_required "Kubernetes version (e.g., v1.34.1): ")
 fi
 
-shape=$(ask "Node shape (e.g., VM.Standard.E5.Flex): ")
+shape=$(ask_required "Node shape (e.g., VM.Standard.E5.Flex): ")
 
 type_is_flex="no"
 case "$shape" in
@@ -351,16 +382,16 @@ case "$shape" in
 ocpus=""
 mem_gb=""
 if [[ "$type_is_flex" == "yes" ]]; then
-  ocpus=$(ask "OCPUs per node: ")
-  mem_gb=$(ask "Memory GB per node: ")
+  ocpus=$(ask_required "OCPUs per node: ")
+  mem_gb=$(ask_required "Memory GB per node: ")
 fi
 
-node_count=$(ask "Node count: ")
+node_count=$(ask_required "Node count: ")
 
 # Image selection: list images for k8s version and prompt
 image_ocid=""
 if [[ "$oci_available" == "yes" && -n "$k8s_version" ]]; then
-  img_json=$(oci ce node-pool-options get --node-pool-option-id all --region "$region" --query 'data.sources[*].{"image":"image-id","name":"source-name"}' --output json 2>/dev/null || true)
+  img_json=$(oci ce node-pool-options get --node-pool-option-id "$cluster_ocid" --region "$region" --query 'data.sources[*].{"image":"image-id","name":"source-name"}' --output json 2>/dev/null || true)
   if [[ -n "$img_json" && "$img_json" != "[]" ]]; then
     read_lines_into_array img_lines < <(python3 - "$img_json" "$k8s_version" <<'PY'
 import json,sys,re
@@ -375,7 +406,7 @@ for x in items:
 PY
     )
     if [[ ${#img_lines[@]} -gt 0 ]]; then
-      selection=$(select_from_list "Select OKE image for $k8s_version:" "${img_lines[@]}")
+      selection=$(select_from_list "Select OKE image for $k8s_version:" "yes" "${img_lines[@]}")
       if [[ -n "$selection" ]]; then
         image_ocid=$(printf "%s" "$selection" | cut -d'|' -f2 | xargs)
       fi
@@ -384,7 +415,7 @@ PY
 fi
 
 if [[ -z "$image_ocid" ]]; then
-  image_ocid=$(ask "Image OCID: ")
+  image_ocid=$(ask_required "Image OCID: ")
 fi
 
 say ""
@@ -432,7 +463,7 @@ while true; do
   subnet_summary=""
   while [[ -z "$subnet_id" ]]; do
     if [[ ${#subnet_lines[@]} -gt 0 ]]; then
-      selection=$(select_from_list "  Select subnet for this profile:" "${subnet_lines[@]}")
+      selection=$(select_from_list "  Select subnet for this profile:" "yes" "${subnet_lines[@]}")
       if [[ -n "$selection" ]]; then
         subnet_ipv6_state=$(line_field "$selection" 3)
         if [[ "$subnet_ipv6_state" != "ipv4-only" ]]; then
@@ -462,7 +493,7 @@ while true; do
 
   nsg_ids=""
   if [[ ${#nsg_lines[@]} -gt 0 ]]; then
-    selection=$(select_from_list "  Select NSG (or type none):" "${nsg_lines[@]}")
+    selection=$(select_from_list "  Select NSG (or Manual entry for none/custom):" "yes" "${nsg_lines[@]}")
     if [[ -n "$selection" ]]; then
       nsg_ids=$(printf "%s" "$selection" | cut -d'|' -f2 | xargs)
     fi
@@ -609,6 +640,12 @@ for p in "${profile_summaries[@]}"; do
   say "- VNIC: $p"
  done
 
+confirm_generate=$(ask "Generate a create command with these values? (y/N): ")
+if [[ "${confirm_generate,,}" != "y" && "${confirm_generate,,}" != "yes" ]]; then
+  say "Aborted before command generation."
+  exit 0
+fi
+
 say ""
 say "Choose next action:"
 say "1) Run command now"
@@ -651,14 +688,11 @@ printf '%q ' "${cmd[@]}"
 printf '\n'
 
 if [[ "$run_now" == "yes" ]]; then
-  confirm_run=$(ask "Type RUN to execute this command, or press Enter to cancel execution: ")
-  if [[ "$confirm_run" != "RUN" ]]; then
-    say "Execution not confirmed. Command was printed only."
-    run_now="no"
+  final_confirmation=$(ask "Type CREATE to run the node-pool create command now: ")
+  if [[ "$final_confirmation" != "CREATE" ]]; then
+    say "Run cancelled. Command was not executed."
+    exit 0
   fi
-fi
-
-if [[ "$run_now" == "yes" ]]; then
   say ""
   say "Running command..."
   "${cmd[@]}"

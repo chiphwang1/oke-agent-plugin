@@ -12,7 +12,9 @@ Hard constraint:
 - Do not collect node-level information in this workflow. Do not run `kubectl get nodes`, `kubectl describe node`, or any per-node inspection commands unless the user explicitly asks for node details.
 - Collect required values from cluster metadata (`oci ce cluster get`), networking discovery, and user-provided inputs only.
 - Always use an interactive menu for node pool creation/update. Do not perform non-interactive create/update execution in this workflow.
+- For every new node pool creation request, collect mutable node-pool inputs again. Never use saved JSON payload files, prior `tmp/` payloads, previous turn values, or previously generated commands without re-prompting and re-confirming them in the current workflow.
 - Never start discovery on an implicit/default cluster. Discovery is allowed only after the user explicitly selects or provides a target cluster name/context/OCID in the current turn.
+- Never use an OCI config default region for workflow execution. Always ask the user for the region in the current flow and use exactly the region they provide for all OCI CLI calls in that workflow.
 
 Supporting reference (load on demand):
 - `references/gva.md` — concise feature summary, constraints, and example CLI / pod specs
@@ -30,7 +32,9 @@ Flow requirements:
    - Do not assume a default cluster (for example `cluster3`) even if scripts offer one.
    - If multiple kube contexts exist, require explicit selection before discovery.
 2) Resolve **cluster OCID** from `~/.kube/config` when possible.
-3) Resolve **tenancy/region defaults** from `~/.oci/config`.
+3) Resolve **tenancy defaults** from `~/.oci/config` only for non-region values if needed.
+   - Always ask the user for the region in the current flow.
+   - Use only the user-provided region for all OCI CLI calls in this workflow.
 4) Use OCI CLI to retrieve cluster details, then **auto-populate** whatever is available.
 5) Prompt only for missing information.
 
@@ -99,6 +103,8 @@ Interaction rules:
 - Do not mark options as "recommended" unless the user explicitly asks for recommendations.
 - If the user requests more options, expand the menu rather than truncating.
 - Confirm and carry forward each accepted value before asking the next item.
+- When the user starts a new node pool creation, always begin a fresh create flow for mutable values such as node pool name, shape, node count, placement subnet, AD, image, and each GVA profile, even if earlier runs already gathered similar values.
+- Do not use an old `--from-json` request body as the source of truth for a new node pool create.
 
 Menu order:
 1) VCN selection
@@ -181,6 +187,7 @@ Before generating create/update commands, collect and confirm:
 - Secondary VNIC display name (recommended)
 - Whether additional GVA profiles are required (explicit yes/no loop)
 - Optional node pool parameters (tags, labels, boot volume, SSH key, etc.)
+- Final explicit create confirmation in the current turn before generating a runnable command
 
 ---
 
