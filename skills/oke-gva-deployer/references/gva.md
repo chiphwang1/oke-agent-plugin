@@ -24,7 +24,7 @@ Source: `gva-documentation_1_14.docx` (Document Version 1.0, Last Updated Decemb
 - Node pool permissions to create/manage VNICs.
 
 ## Constraints and Limits
-- `ipCount` per VNIC is capped at **16**.
+- `ipCount` per VNIC is capped at **256**.
 - Pods can request **only one** Application Resource type.
 - Pods must request **exactly 1** unit of that resource.
 - Multi-homed pods are not supported.

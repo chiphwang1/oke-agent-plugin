@@ -1,6 +1,6 @@
 # OKE Agent Plugin
 
-A Claude Code plugin for Oracle Kubernetes Engine (OKE) on Oracle Cloud Infrastructure (OCI).
+A Claude Code plugin for OCI Kubernetes Engine (OKE) on Oracle Cloud Infrastructure (OCI).
 Fills the gap in AI-assisted Kubernetes tooling.
 
 ## Skills
@@ -50,8 +50,8 @@ Performs end-to-end diagnosis of OKE incidents by correlating Kubernetes symptom
 **Phases:**
 1. **Input & Preflight** — capture symptom, namespace, and verify `kubectl`/`oci` availability.
 2. **Symptom Triage** — map keywords to diagnostic domains (pod runtime, networking, storage, control plane, IAM, OCI limits).
-3. **Evidence Collection** — run curated command batches via the Haiku subagent to gather structured findings.
-4. **Hypothesis Ranking** — invoke the Sonnet analyst to score top root-cause hypotheses with cited evidence.
+3. **Evidence Collection** — run curated command batches locally by default; use the optional evidence-collector agent only when delegation is available.
+4. **Hypothesis Ranking** — rank causes locally by default; use the optional analyst agent only when delegation is available.
 5. **Report & Next Steps** — present remediation commands, prevention guidance, and note any evidence gaps.
 
 **Prerequisites:**
@@ -83,9 +83,9 @@ Deploys OKE node pools configured with Generic VNIC Attachment (GVA), including 
 - OCI CLI installed and configured
 - `kubectl` configured for the target cluster
 - GVA preview CLI workflow:
-  - `source /Users/chipinghwang/Desktop/projects/codex_oke_plugin/oke-agent-plugin/gva-cli/bin/activate`
+  - `source "$(bash ./scripts/gva-cli-resolve.sh --print-activate)"`
   - If needed, install local preview wheel:
-    - `python -m pip install --no-deps --force-reinstall /Users/chipinghwang/Desktop/projects/codex_oke_plugin/oke-agent-plugin/gva-cli/oci_cli-3.65.2+preview.1.1355-py2.py3-none-any.whl`
+    - `python -m pip install --no-deps --force-reinstall "$(bash ./scripts/gva-cli-resolve.sh --print-wheel)"`
 
 **Usage:**
 
@@ -103,7 +103,6 @@ oke-agent-plugin/
 │   ├── oke-evidence-collector.md           # Haiku subagent for command execution
 │   ├── oke-hypothesis-analyst.md           # Sonnet subagent for hypothesis scoring
 │   ├── oke-lb-log-collector.md             # Haiku subagent for LB logging evidence
-│   └── oke-repo-committer.md               # Haiku subagent for scoped commit/push workflow
 ├── settings.json                           # Claude Code settings
 ├── skills/
 │   ├── oke-cluster-generator/
@@ -129,16 +128,57 @@ oke-agent-plugin/
     └── validate-cidr.sh                    # CIDR overlap detection (VCN / Pod / Service CIDRs)
     ├── gva-menu.sh                          # Interactive GVA node-pool builder
     ├── gva-discover.sh                      # GVA discovery helper (cluster/VCN/subnet/NSG)
+    ├── gva-cli-resolve.sh                   # Resolve preview GVA CLI workspace paths
     └── oke-discover.sh                      # Troubleshooter cluster discovery helper
     └── node-doctor-run.sh                   # Node doctor runner via kubectl debug + chroot
 ```
 
 ## Installation
 
+### Claude Code Plugin
+
 ```bash
 git clone https://github.com/chiphwang1/oke-agent-plugin.git
 claude --plugin-dir ./oke-agent-plugin
 ```
+
+### Codex Local Skills
+
+This repository does not yet ship a Codex plugin manifest. For Codex, install the skills and their supporting assets into `~/.codex`, preserving the relative layout used by the skill files.
+
+```bash
+git clone https://github.com/chiphwang1/oke-agent-plugin.git
+cd oke-agent-plugin
+
+mkdir -p ~/.codex/skills ~/.codex/scripts ~/.codex/shared ~/.codex/agents
+
+cp -R skills/oke-cluster-generator ~/.codex/skills/
+cp -R skills/oke-troubleshooter ~/.codex/skills/
+cp -R skills/oke-gva-deployer ~/.codex/skills/
+
+cp scripts/*.sh ~/.codex/scripts/
+chmod +x ~/.codex/scripts/*.sh
+
+cp -R shared/. ~/.codex/shared/
+cp -R agents/. ~/.codex/agents/
+```
+
+Then start Codex in the workspace you want to operate on:
+
+```bash
+codex login
+codex -C /path/to/your/workspace
+```
+
+The skills auto-trigger from their `SKILL.md` descriptions. Example prompts:
+
+```text
+Build an OKE Terraform stack for us-ashburn-1
+Troubleshoot why my OKE service has no load balancer IP
+Configure OKE Generic VNIC Attachment for this cluster
+```
+
+If you update this repo later, reinstall the changed folders into `~/.codex` so Codex sees the latest skill definitions and helper scripts.
 
 ## Error Handling
 
@@ -178,5 +218,5 @@ Manually validate the plugin with the following flows:
 - [oke-terraform-stack-builder](https://github.com/chiphwang1/oke-terraform-stack-builder) — Skill 1 reference implementation
 - [K8sGPT](https://github.com/k8sgpt-ai/k8sgpt) — Analyzer patterns for Kubernetes troubleshooting
 - [HolmesGPT](https://github.com/robusta-dev/holmesgpt) — Symptom → evidence → hypothesis workflow inspiration
-- [OKE Documentation](https://docs.oracle.com/en-us/iaas/Content/ContEng/home.htm) — Oracle Kubernetes Engine docs
+- [OKE Documentation](https://docs.oracle.com/en-us/iaas/Content/ContEng/home.htm) — OCI Kubernetes Engine docs
 - [Claude Code Plugins Reference](https://docs.anthropic.com/en/docs/claude-code/plugins) — Plugin architecture

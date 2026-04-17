@@ -1,6 +1,6 @@
 ---
 name: oke-gva-deployer
-description: Use this skill when the user asks to enable, deploy, or configure Generic VNIC Attachment (GVA) for Oracle Kubernetes Engine (OKE), create/update node pools with secondary VNIC profiles, map Application Resources to workloads, or explain GVA functionality, constraints, and scheduling behavior.
+description: Use this skill when the user asks to enable, deploy, or configure Generic VNIC Attachment (GVA) for OCI Kubernetes Engine (OKE), create/update node pools with secondary VNIC profiles, map Application Resources to workloads, or explain GVA functionality, constraints, and scheduling behavior.
 ---
 
 # OKE Generic VNIC Attachment (GVA) Deployer
@@ -20,6 +20,7 @@ Supporting reference (load on demand):
 Scripts:
 - `../../scripts/gva-discover.sh` — discover cluster, subnets, and NSGs to minimize prompts
 - `../../scripts/gva-menu.sh` — guided interactive flow that consumes discovery data and prints CLI command + test manifest
+- `../../scripts/gva-cli-resolve.sh` — resolve the preview GVA OCI CLI workspace from env or known local paths
 
 ---
 
@@ -112,7 +113,7 @@ Menu order:
    - `applicationResource` label
    - GVA secondary subnet
    - NSG selection (`none` allowed)
-   - `ipCount` (1-16)
+   - `ipCount` (1-256)
 10) Ask: "Add another secondary VNIC profile?" and repeat step 9 until user says no.
 
 Data presentation rules:
@@ -145,7 +146,7 @@ Automation option:
 Create a table of VNIC profiles with these fields:
 - `applicationResource` (string label used by pods)
 - `subnetId` (OCID)
-- `ipCount` (integer, max 16)
+- `ipCount` (integer, max 256)
 - `nsgIds` (list, optional)
 - `displayName` (optional)
 - `assignPublicIp` (optional, default false)
@@ -176,7 +177,7 @@ Before generating create/update commands, collect and confirm:
 - `applicationResource` label per profile
 - GVA secondary subnet per profile
 - NSG IDs per profile
-- `ipCount` per profile (1-16)
+- `ipCount` per profile (1-256)
 - Secondary VNIC display name (recommended)
 - Whether additional GVA profiles are required (explicit yes/no loop)
 - Optional node pool parameters (tags, labels, boot volume, SSH key, etc.)
@@ -190,7 +191,7 @@ Execution constraint:
 CLI runtime workflow (mandatory before create):
 1) Activate the dedicated GVA CLI environment:
 ```bash
-source /Users/chipinghwang/Desktop/projects/codex_oke_plugin/oke-agent-plugin/gva-cli/bin/activate
+source "$(bash ../../scripts/gva-cli-resolve.sh --print-activate)"
 ```
 2) Confirm CLI version supports GVA flags:
 ```bash
@@ -199,7 +200,7 @@ oci ce node-pool create --help | rg 'secondary-vnics|cni-type'
 ```
 3) If missing, install local preview wheel from the skill workspace:
 ```bash
-python -m pip install --no-deps --force-reinstall /Users/chipinghwang/Desktop/projects/codex_oke_plugin/oke-agent-plugin/gva-cli/oci_cli-3.65.2+preview.1.1355-py2.py3-none-any.whl
+python -m pip install --no-deps --force-reinstall "$(bash ../../scripts/gva-cli-resolve.sh --print-wheel)"
 ```
 4) Re-check help output and only then run create.
 

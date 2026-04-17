@@ -1,7 +1,7 @@
 # Skill 1 Implementation Notes — `/oke-cluster-generator`
 
 ## Overview
-`/oke-cluster-generator` walks operators through a structured, five-phase workflow to produce production-ready Terraform artifacts and an OCI Resource Manager (`schema.yaml`) bundle for Oracle Kubernetes Engine (OKE). The skill mirrors the legacy **OKE Terraform Stack Builder** flow but is adapted to the plugin architecture with live tenancy discovery, argument pre-fill, and error-contract alignment.
+`/oke-cluster-generator` walks operators through a structured, five-phase workflow to produce production-ready Terraform artifacts and an OCI Resource Manager (`schema.yaml`) bundle for OCI Kubernetes Engine (OKE). The skill mirrors the legacy **OKE Terraform Stack Builder** flow but is adapted to the plugin architecture with live tenancy discovery, argument pre-fill, and error-contract alignment.
 
 The skill definition lives in `skills/oke-cluster-generator/SKILL.md`, with supporting materials under the same directory. Shared scripts in `scripts/` (at repo root) provide tenancy discovery and CIDR validation.
 

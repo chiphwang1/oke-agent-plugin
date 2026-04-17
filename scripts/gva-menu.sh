@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+GVA_DISCOVER_SCRIPT="$SCRIPT_DIR/gva-discover.sh"
+
 say() { printf "%s\n" "$*"; }
 ask() {
   local prompt="$1" var
@@ -35,10 +39,28 @@ select_from_list() {
 
 normalize_none() {
   local v="$1"
-  case "${v,,}" in
+  local v_lower
+  v_lower="$(printf "%s" "$v" | tr '[:upper:]' '[:lower:]')"
+  case "$v_lower" in
     ""|"0"|"none"|"no"|"n"|"skip") echo "" ;;
     *) echo "$v" ;;
   esac
+}
+
+lower() {
+  printf "%s" "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+line_field() {
+  local line="$1"
+  local field_no="$2"
+  printf "%s" "$line" | cut -d'|' -f"$field_no" | xargs
+}
+
+ip_count_valid() {
+  local value="$1"
+  [[ "$value" =~ ^[0-9]+$ ]] || return 1
+  (( value >= 1 && value <= 256 ))
 }
 
 oci_available="yes"
@@ -141,7 +163,7 @@ fi
 compartment_ocid=""
 discovery_json=""
 if [[ "$oci_available" == "yes" ]]; then
-  discover_cmd=(./scripts/gva-discover.sh --cluster "$cluster_ocid" --timeout 10)
+  discover_cmd=("$GVA_DISCOVER_SCRIPT" --cluster "$cluster_ocid" --timeout 10)
   if [[ -n "$region" ]]; then
     discover_cmd+=(--region "$region")
   fi
@@ -157,35 +179,35 @@ nsg_lines=()
 vcn_lines=()
 
 if [[ -n "$discovery_json" ]]; then
-  cluster_k8s=$(python3 - <<'PY'
+  cluster_k8s=$(python3 - "$discovery_json" <<'PY'
 import json,sys
 try:
-    d=json.loads(sys.stdin.read())
+    d=json.loads(sys.argv[1])
 except Exception:
     d={}
 print(d.get('cluster',{}).get('kubernetes_version',''))
 PY
-  <<<"$discovery_json")
+  )
 
-  comp_from_discovery=$(python3 - <<'PY'
+  comp_from_discovery=$(python3 - "$discovery_json" <<'PY'
 import json,sys
 try:
-    d=json.loads(sys.stdin.read())
+    d=json.loads(sys.argv[1])
 except Exception:
     d={}
 print(d.get('cluster',{}).get('compartment_id',''))
 PY
-  <<<"$discovery_json")
+  )
 
-  region_from_discovery=$(python3 - <<'PY'
+  region_from_discovery=$(python3 - "$discovery_json" <<'PY'
 import json,sys
 try:
-    d=json.loads(sys.stdin.read())
+    d=json.loads(sys.argv[1])
 except Exception:
     d={}
 print(d.get('cluster',{}).get('region',''))
 PY
-  <<<"$discovery_json")
+  )
 
   if [[ -z "$compartment_ocid" && -n "$comp_from_discovery" ]]; then
     compartment_ocid="$comp_from_discovery"
@@ -194,34 +216,42 @@ PY
     region="$region_from_discovery"
   fi
 
-  read_lines_into_array subnet_lines < <(python3 - <<'PY'
+  read_lines_into_array subnet_lines < <(python3 - "$discovery_json" <<'PY'
 import json,sys
 try:
-    d=json.loads(sys.stdin.read())
+    d=json.loads(sys.argv[1])
 except Exception:
     d={}
-for s in d.get('subnets',[]):
+subnets = d.get('subnets', [])
+if isinstance(subnets, dict):
+    subnets = subnets.get('data', [])
+for s in subnets:
     name=s.get('name') or ''
     sid=s.get('id') or ''
     cidr=s.get('cidr') or ''
+    ipv6=s.get('ipv6') or []
+    ipv6_status='has-ipv6' if ipv6 else 'ipv4-only'
     if name and sid:
-        print(f"{name} | {cidr} | {sid}")
+        print(f"{name} | {cidr} | {ipv6_status} | {sid}")
 PY
-  <<<"$discovery_json")
+  )
 
-  read_lines_into_array nsg_lines < <(python3 - <<'PY'
+  read_lines_into_array nsg_lines < <(python3 - "$discovery_json" <<'PY'
 import json,sys
 try:
-    d=json.loads(sys.stdin.read())
+    d=json.loads(sys.argv[1])
 except Exception:
     d={}
-for n in d.get('nsgs',[]):
+nsgs = d.get('nsgs', [])
+if isinstance(nsgs, dict):
+    nsgs = nsgs.get('data', [])
+for n in nsgs:
     name=n.get('name') or ''
     nid=n.get('id') or ''
     if name and nid:
         print(f"{name} | {nid}")
 PY
-  <<<"$discovery_json")
+  )
 fi
 
 if [[ -z "$region" ]]; then
@@ -238,10 +268,10 @@ vcn_id=""
 if [[ "$oci_available" == "yes" && -n "$compartment_ocid" ]]; then
   vcn_json=$(oci network vcn list --compartment-id "$compartment_ocid" --region "$region" --query 'data[*].{name:"display-name",id:id,cidr:"cidr-block"}' --output json 2>/dev/null || true)
   if [[ -n "$vcn_json" && "$vcn_json" != "[]" ]]; then
-    read_lines_into_array vcn_lines < <(python3 - <<'PY'
+    read_lines_into_array vcn_lines < <(python3 - "$vcn_json" <<'PY'
 import json,sys
 try:
-    d=json.loads(sys.stdin.read())
+    d=json.loads(sys.argv[1])
 except Exception:
     d={}
 for v in d if isinstance(d, list) else []:
@@ -251,7 +281,7 @@ for v in d if isinstance(d, list) else []:
     if name and vid:
         print(f"{name} | {cidr} | {vid}")
 PY
-    <<<"$vcn_json")
+    )
   fi
 fi
 
@@ -267,22 +297,24 @@ fi
 
 if [[ -n "$vcn_id" ]]; then
   subnet_lines=()
-  subnet_json=$(oci network subnet list --compartment-id "$compartment_ocid" --vcn-id "$vcn_id" --region "$region" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json 2>/dev/null || true)
+  subnet_json=$(oci network subnet list --compartment-id "$compartment_ocid" --vcn-id "$vcn_id" --region "$region" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block","ipv6":"ipv6-cidr-blocks"}' --output json 2>/dev/null || true)
   if [[ -n "$subnet_json" && "$subnet_json" != "[]" ]]; then
-    read_lines_into_array subnet_lines < <(python3 - <<'PY'
+    read_lines_into_array subnet_lines < <(python3 - "$subnet_json" <<'PY'
 import json,sys
 try:
-    d=json.loads(sys.stdin.read())
+    d=json.loads(sys.argv[1])
 except Exception:
     d={}
 for s in d.get('data', d) if isinstance(d, dict) else d:
     name=s.get('name') or s.get('display-name') or ''
     sid=s.get('id') or ''
     cidr=s.get('cidr') or s.get('cidr-block') or ''
+    ipv6=s.get('ipv6') or s.get('ipv6-cidr-blocks') or []
+    ipv6_status='has-ipv6' if ipv6 else 'ipv4-only'
     if name and sid:
-        print(f"{name} | {cidr} | {sid}")
+        print(f"{name} | {cidr} | {ipv6_status} | {sid}")
 PY
-    <<<"$subnet_json")
+    )
   fi
 fi
 
@@ -290,7 +322,7 @@ primary_subnet=""
 if [[ ${#subnet_lines[@]} -gt 0 ]]; then
   selection=$(select_from_list "Select primary subnet (node placement):" "${subnet_lines[@]}")
   if [[ -n "$selection" ]]; then
-    primary_subnet=$(printf "%s" "$selection" | cut -d'|' -f3 | xargs)
+    primary_subnet=$(line_field "$selection" 4)
   fi
 fi
 if [[ -z "$primary_subnet" ]]; then
@@ -330,18 +362,18 @@ image_ocid=""
 if [[ "$oci_available" == "yes" && -n "$k8s_version" ]]; then
   img_json=$(oci ce node-pool-options get --node-pool-option-id all --region "$region" --query 'data.sources[*].{"image":"image-id","name":"source-name"}' --output json 2>/dev/null || true)
   if [[ -n "$img_json" && "$img_json" != "[]" ]]; then
-    read_lines_into_array img_lines < <(python3 - <<'PY'
+    read_lines_into_array img_lines < <(python3 - "$img_json" "$k8s_version" <<'PY'
 import json,sys,re
 try:
-    d=json.loads(sys.stdin.read())
+    d=json.loads(sys.argv[1])
 except Exception:
     d=[]
-pattern=re.compile(rf'OKE-{re.escape(sys.argv[1])}')
+pattern=re.compile(rf'OKE-{re.escape(sys.argv[2])}')
 items=[x for x in d if pattern.search(x.get('name',''))]
 for x in items:
     print(f"{x.get('name')} | {x.get('image')}")
 PY
-    <<<"$img_json" "$k8s_version")
+    )
     if [[ ${#img_lines[@]} -gt 0 ]]; then
       selection=$(select_from_list "Select OKE image for $k8s_version:" "${img_lines[@]}")
       if [[ -n "$selection" ]]; then
@@ -370,23 +402,63 @@ select cni_ok in "Yes" "No"; do
 # Collect VNIC profiles
 profiles=()
 profile_summaries=()
+application_resources=()
 while true; do
   say ""
   say "Add a secondary VNIC profile (GVA tier)"
-  app_res=$(ask "  applicationResource (label): ")
+  while true; do
+    app_res=$(ask "  applicationResource (label): ")
+    if [[ -z "$app_res" ]]; then
+      say "  applicationResource is required."
+      continue
+    fi
+    duplicate="no"
+    if [[ ${#application_resources[@]} -gt 0 ]]; then
+      for existing in "${application_resources[@]}"; do
+        if [[ "$existing" == "$app_res" ]]; then
+          duplicate="yes"
+          break
+        fi
+      done
+    fi
+    if [[ "$duplicate" == "yes" ]]; then
+      say "  applicationResource values must be unique across profiles."
+      continue
+    fi
+    break
+  done
 
   subnet_id=""
-  if [[ ${#subnet_lines[@]} -gt 0 ]]; then
-    selection=$(select_from_list "  Select subnet for this profile:" "${subnet_lines[@]}")
-    if [[ -n "$selection" ]]; then
-      subnet_id=$(printf "%s" "$selection" | cut -d'|' -f3 | xargs)
+  subnet_summary=""
+  while [[ -z "$subnet_id" ]]; do
+    if [[ ${#subnet_lines[@]} -gt 0 ]]; then
+      selection=$(select_from_list "  Select subnet for this profile:" "${subnet_lines[@]}")
+      if [[ -n "$selection" ]]; then
+        subnet_ipv6_state=$(line_field "$selection" 3)
+        if [[ "$subnet_ipv6_state" != "ipv4-only" ]]; then
+          say "  Selected subnet advertises IPv6 and cannot be used for a GVA secondary VNIC. Choose an IPv4-only subnet."
+          continue
+        fi
+        subnet_id=$(line_field "$selection" 4)
+        subnet_summary="$(line_field "$selection" 1) ($(line_field "$selection" 2))"
+      fi
     fi
-  fi
-  if [[ -z "$subnet_id" ]]; then
-    subnet_id=$(ask "  subnetId OCID: ")
-  fi
+    if [[ -z "$subnet_id" ]]; then
+      subnet_id=$(ask "  subnetId OCID: ")
+      if [[ -n "$subnet_id" ]]; then
+        say "  Manual subnet entry cannot be IPv6-validated. Ensure the subnet is IPv4-only."
+        subnet_summary="$subnet_id"
+      fi
+    fi
+  done
 
-  ip_count=$(ask "  ipCount (max 16): ")
+  while true; do
+    ip_count=$(ask "  ipCount (1-256): ")
+    if ip_count_valid "$ip_count"; then
+      break
+    fi
+    say "  ipCount must be an integer between 1 and 256."
+  done
 
   nsg_ids=""
   if [[ ${#nsg_lines[@]} -gt 0 ]]; then
@@ -445,7 +517,8 @@ PY
   )"
 
   profiles+=("$profile_json")
-  profile_summaries+=("$app_res | ipCount=$ip_count | subnet=$subnet_id")
+  application_resources+=("$app_res")
+  profile_summaries+=("$app_res | ipCount=$ip_count | subnet=$subnet_summary")
 
   say ""
   select more in "Add another profile" "Finish"; do
@@ -473,7 +546,7 @@ fi
 
 optional_args=()
 add_optional=$(ask "Add optional node-pool parameters? (y/N): ")
-if [[ "${add_optional,,}" == "y" || "${add_optional,,}" == "yes" ]]; then
+if [[ "$(lower "$add_optional")" == "y" || "$(lower "$add_optional")" == "yes" ]]; then
   defined_tags=$(ask "  --defined-tags (JSON or file://path, optional): ")
   if [[ -n "$defined_tags" ]]; then
     optional_args+=("--defined-tags" "$defined_tags")
@@ -495,7 +568,7 @@ if [[ "${add_optional,,}" == "y" || "${add_optional,,}" == "yes" ]]; then
   fi
 
   pv_encrypt=$(ask "  --is-pv-encryption-in-transit-enabled? (y/N): ")
-  if [[ "${pv_encrypt,,}" == "y" || "${pv_encrypt,,}" == "yes" ]]; then
+  if [[ "$(lower "$pv_encrypt")" == "y" || "$(lower "$pv_encrypt")" == "yes" ]]; then
     optional_args+=("--is-pv-encryption-in-transit-enabled" "true")
   fi
 
@@ -571,9 +644,19 @@ cmd=(
   --node-source-details "{\"sourceType\":\"IMAGE\",\"imageId\":\"$image_ocid\"}"
   --secondary-vnics "$secondary_vnics_json"
 )
-cmd+=("${optional_args[@]}")
+if [[ ${#optional_args[@]} -gt 0 ]]; then
+  cmd+=("${optional_args[@]}")
+fi
 printf '%q ' "${cmd[@]}"
 printf '\n'
+
+if [[ "$run_now" == "yes" ]]; then
+  confirm_run=$(ask "Type RUN to execute this command, or press Enter to cancel execution: ")
+  if [[ "$confirm_run" != "RUN" ]]; then
+    say "Execution not confirmed. Command was printed only."
+    run_now="no"
+  fi
+fi
 
 if [[ "$run_now" == "yes" ]]; then
   say ""

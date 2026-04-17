@@ -7,6 +7,7 @@ The troubleshooter focuses on:
 - Symptom-driven triage across Kubernetes and OCI layers
 - Evidence collection via curated `kubectl` and `oci` commands
 - Hypothesis ranking with remediation guidance
+- Local execution first, with optional agent acceleration when the runtime supports it
 
 ## Current Implementation
 - **Skill spec**: `skills/oke-troubleshooter/SKILL.md`
@@ -14,6 +15,7 @@ The troubleshooter focuses on:
 - **Evidence recipes**: `skills/oke-troubleshooter/evidence-collectors.md`
 - **Shared mapping**: `shared/oci-resource-map.md`
 - **Discovery helper**: `scripts/oke-discover.sh`
+- **Optional agents**: `agents/oke-evidence-collector.md`, `agents/oke-hypothesis-analyst.md`, `agents/oke-lb-log-collector.md`
 
 ## Discovery Flow (New)
 1. User provides **cluster name** (or OCID).
@@ -22,6 +24,11 @@ The troubleshooter focuses on:
 4. `oci ce cluster get --cluster-id <ocid>` retrieves compartment and K8s version.
 5. The skill auto-populates `cluster_ocid`, `compartment_ocid`, and `region`.
 6. Prompt only for missing context (namespace, time window, resource names).
+
+## Execution Model
+- The parent skill remains authoritative and must be able to complete the investigation without spawning agents.
+- Optional agents are accelerators only. If delegation is unavailable or fails, the skill runs the same evidence commands locally and ranks hypotheses with the built-in scoring rubric.
+- Control-plane checks now use `kubectl get --raw='/readyz?verbose'` and `kubectl get --raw='/livez?verbose'` instead of the deprecated `kubectl get cs`.
 
 ## Assumptions
 - `kubectl` is configured to access the target cluster.

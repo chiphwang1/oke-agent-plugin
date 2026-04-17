@@ -249,6 +249,53 @@ run_test_gva_discover_quoted_cluster_name() {
   assert_json_expr "$out" "obj['cluster']['id'] == 'ocid1.cluster.oc1..quoted'" "quoted cluster resolved correctly"
 }
 
+run_test_gva_cli_resolve_uses_env_override() {
+  echo "- gva-cli-resolve honors OKE_GVA_CLI_HOME"
+  local custom_home out
+  custom_home="$TMPDIR_BASE/custom-gva-cli"
+  mkdir -p "$custom_home/bin"
+  touch "$custom_home/bin/activate"
+  touch "$custom_home/oci_cli-3.65.2+preview.1.1355-py2.py3-none-any.whl"
+  out="$(OKE_GVA_CLI_HOME="$custom_home" "$REPO_ROOT/scripts/gva-cli-resolve.sh" --json)"
+  assert_json_expr "$out" "obj['home'].endswith('/custom-gva-cli')" "gva-cli-resolve prefers env override"
+  assert_json_expr "$out" "obj['has_activate'] is True" "gva-cli-resolve sees activate path"
+  assert_json_expr "$out" "obj['has_wheel'] is True" "gva-cli-resolve sees wheel path"
+}
+
+run_test_gva_menu_rejects_invalid_ipcount() {
+  echo "- gva-menu rejects ipCount values outside 1..256"
+  local out rc
+  set +e
+  out="$(printf 'cluster-a\n\n\nocid1.cluster.oc1..abc\nGrCh:US-ASHBURN-AD-1\nocid1.subnet.oc1..primary\npool1\nVM.Standard.E5.Flex\n2\n16\n3\nocid1.image.oc1..img\n1\nfrontend\nocid1.subnet.oc1..secondary\n257\n256\n\nfrontend-vnic\n2\n\n2\n' | "$REPO_ROOT/scripts/gva-menu.sh" 2>"$TMPDIR_BASE/t6.err")"
+  rc=$?
+  set -e
+  assert_eq "0" "$rc" "gva-menu still completes after retrying ipCount"
+  assert_contains "$out" "ipCount must be an integer between 1 and 256." "gva-menu warns on invalid ipCount"
+  assert_contains "$out" "Using cluster Kubernetes version: v1.31.1" "gva-menu still consumes discovery output"
+  assert_contains "$out" "--secondary-vnics" "gva-menu still prints command after correction"
+}
+
+run_test_troubleshooter_skill_has_local_fallback() {
+  echo "- troubleshooter skill documents local fallback when delegation is unavailable"
+  local body
+  body="$(cat "$REPO_ROOT/skills/oke-troubleshooter/SKILL.md")"
+  assert_contains "$body" "Default to **local execution in the parent skill**." "troubleshooter skill declares local execution default"
+  assert_contains "$body" 'If delegation is available, you may hand the payload to `oke-evidence-collector`.' "troubleshooter skill treats evidence agent as optional"
+  assert_contains "$body" "Otherwise rank hypotheses locally using this rubric:" "troubleshooter skill includes local ranking rubric"
+}
+
+run_test_troubleshooter_control_plane_recipe_uses_readyz() {
+  echo "- troubleshooter control-plane recipe uses readyz/livez instead of kubectl get cs"
+  local body
+  body="$(cat "$REPO_ROOT/skills/oke-troubleshooter/evidence-collectors.md")"
+  assert_contains "$body" "kubectl get --raw='/readyz?verbose'" "control-plane recipe uses readyz"
+  assert_contains "$body" "kubectl get --raw='/livez?verbose'" "control-plane recipe uses livez"
+  if [[ "$body" == *"kubectl get cs"* ]]; then
+    echo "FAIL: control-plane recipe should not use deprecated kubectl get cs" >&2
+    exit 1
+  fi
+}
+
 main() {
   TMPDIR_BASE="$(mktemp -d)"
   if [[ "${KEEP_TMPDIR:-0}" == "1" ]]; then
@@ -268,6 +315,10 @@ main() {
   run_test_oke_discover_cluster_get_failure
   run_test_node_doctor_namespace
   run_test_gva_discover_quoted_cluster_name
+  run_test_gva_cli_resolve_uses_env_override
+  run_test_gva_menu_rejects_invalid_ipcount
+  run_test_troubleshooter_skill_has_local_fallback
+  run_test_troubleshooter_control_plane_recipe_uses_readyz
 
   echo "All smoke tests passed."
 }

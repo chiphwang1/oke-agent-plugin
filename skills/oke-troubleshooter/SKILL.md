@@ -1,19 +1,19 @@
 ---
 name: oke-troubleshooter
-description: Use this skill when the user wants to diagnose issues with an Oracle Kubernetes Engine cluster. Trigger phrases include "pods pending", "troubleshoot OKE", "service has no IP", "cluster unhealthy", or any request to root-cause OKE symptoms.
+description: Use this skill when the user wants to diagnose issues with an OCI Kubernetes Engine cluster. Trigger phrases include "pods pending", "troubleshoot OKE", "service has no IP", "cluster unhealthy", or any request to root-cause OKE symptoms.
 ---
 
-You are an experienced Site Reliability Engineer for Oracle Kubernetes Engine. Guide the user through an evidence-driven investigation that spans Kubernetes signals and OCI infrastructure.
+You are an experienced Site Reliability Engineer for OCI Kubernetes Engine. Guide the user through an evidence-driven investigation that spans Kubernetes signals and OCI infrastructure.
 
 Supporting references (load on demand):
 - `symptom-triage.md` — initial mapping of symptom → diagnostic domains.
 - `evidence-collectors.md` — command recipes for each domain.
 - `../../shared/oci-resource-map.md` — K8s-to-OCI mapping commands.
 
-Subagents:
-- `../../agents/oke-evidence-collector.md` — Haiku agent for command execution.
-- `../../agents/oke-hypothesis-analyst.md` — Sonnet agent for scoring hypotheses.
-- `../../agents/oke-lb-log-collector.md` — Haiku agent for LB OCID resolution, logging-status checks, and LB log signal extraction.
+Optional accelerators (use only when the runtime supports delegation; never block on them):
+- `../../agents/oke-evidence-collector.md` — agent for command execution and evidence normalization.
+- `../../agents/oke-hypothesis-analyst.md` — agent for scoring hypotheses.
+- `../../agents/oke-lb-log-collector.md` — agent for LB OCID resolution, logging-status checks, and LB log signal extraction.
 
 Scripts rely on the global error contract: exit 0 success, exit 1 expected issues, exit 2 unexpected. Emit JSON errors on stderr in failure scenarios.
 
@@ -21,6 +21,13 @@ Helper scripts:
 - `../../scripts/oke-discover.sh` — resolve cluster OCID from kubeconfig and fetch compartment/region via OCI CLI
 
 ---
+
+## Execution Mode
+
+- Default to **local execution in the parent skill**.
+- Use the optional agents above only as accelerators when the current runtime clearly supports agent delegation.
+- If agents are unavailable, disabled, or return malformed output, continue locally with the same command list and payload shape. Do not stop the investigation solely because delegation is unavailable.
+- Normalize local evidence to the same JSON shape documented in `evidence-collectors.md`.
 
 ## Phase 0 — Input & Preflight
 1. **Parse Arguments**  
@@ -127,8 +134,8 @@ Helper scripts:
        "purpose": "Inspect scheduling events"
      }
      ```
-   - For Networking/LB investigations, invoke `oke-lb-log-collector` with `context: fork` instead of embedding ad-hoc LB log logic in the parent skill.
-   - Pass payload: `namespace`, `service`, `region`, `compartment_ocid`, `time_window`, and `enable_logging_mode`.
+   - For Networking/LB investigations, prefer the dedicated LB collector when delegation is available. Otherwise run the LB commands from `evidence-collectors.md` locally and normalize the same output fields in the parent skill.
+   - Use payload fields: `namespace`, `service`, `region`, `compartment_ocid`, `time_window`, and `enable_logging_mode`.
    - Enablement interaction:
      - Ask user only when collector reports `logging_status=disabled|unknown`:
        - `No (report only)`
@@ -173,9 +180,10 @@ Helper scripts:
      "compartment_ocid": "..."
    }
    ```
-3. Invoke `oke-evidence-collector` using `context: fork` with the payload and the prepared command list.  
-   - If the collector returns structured evidence, append to session state.  
-   - On collector error (exit 1/2), surface the JSON error to the user and offer to retry after fixing the issue.
+3. Execute the prepared command list.
+   - If delegation is available, you may hand the payload to `oke-evidence-collector`.
+   - Otherwise run the commands locally in the parent skill and normalize them to the documented evidence JSON shape (`domain`, `findings`, `raw_snippets`, `anomalies`, `fallback_used`).
+   - If delegated collection fails or returns malformed output, fall back to local execution immediately.
 4. After all domains processed, summarize key findings to the user before analysis. Note any `fallback_used` signals or missing data.
 
 ---
@@ -191,9 +199,15 @@ Helper scripts:
       "fallbacks": {"kubectl": false, "oci": true}
    }
    ```
-2. Invoke `oke-hypothesis-analyst`.  
-   - If analyst reports missing evidence, offer to rerun Phase 3 with expanded commands or additional domains.  
-   - Ensure each hypothesis includes score, bottleneck hop attribution, evidence bullets, remediation commands, and prevention guidance.
+2. Rank hypotheses.
+   - If delegation is available, you may use `oke-hypothesis-analyst`.
+   - Otherwise rank hypotheses locally using this rubric:
+     - `9-10`: direct, converging evidence for one root cause
+     - `6-8`: strong multi-signal correlation with limited ambiguity
+     - `3-5`: plausible but missing a decisive signal
+     - `1-2`: weak signal or mostly evidence-gap guidance
+   - Ensure each hypothesis includes score, bottleneck hop attribution when relevant, evidence bullets, remediation commands, and prevention guidance.
+   - If delegated analysis fails or returns malformed output, fall back to local ranking immediately.
 3. Validate that evidence quotes reference actual snippets collected. If not, request clarification from the analyst or adjust evidence payload.
 
 ---
@@ -217,6 +231,7 @@ Helper scripts:
 ## Error Handling
 - Missing CLI: Continue with available evidence, set fallback flags, warn the user.
 - Permission denied or forbidden: include remediation (e.g., "ensure tenancy OCID has access to compartment").
+- Delegation unavailable or subagent failure: continue locally; do not abort the incident flow.
 - Unexpected script errors: emit JSON error per contract and stop the current phase while keeping collected data.
 
 ## Security & Logging

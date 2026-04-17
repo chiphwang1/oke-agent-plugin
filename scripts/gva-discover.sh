@@ -428,7 +428,7 @@ if [[ -n "$compartment_ocid" ]]; then
 
   if [[ -n "$cluster_vcn_id" ]]; then
     (
-      oci_json network subnet list --compartment-id "$compartment_ocid" --vcn-id "$cluster_vcn_id" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json || true
+      oci_json network subnet list --compartment-id "$compartment_ocid" --vcn-id "$cluster_vcn_id" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block","ipv6":"ipv6-cidr-blocks"}' --output json || true
     ) >"$subnets_tmp" &
     subnets_pid=$!
     (
@@ -437,7 +437,7 @@ if [[ -n "$compartment_ocid" ]]; then
     nsgs_pid=$!
   else
     (
-      oci_json network subnet list --compartment-id "$compartment_ocid" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block"}' --output json || true
+      oci_json network subnet list --compartment-id "$compartment_ocid" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block","ipv6":"ipv6-cidr-blocks"}' --output json || true
     ) >"$subnets_tmp" &
     subnets_pid=$!
     (

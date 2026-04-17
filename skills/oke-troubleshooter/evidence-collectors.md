@@ -158,12 +158,13 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
 ## Control Plane
 - **Kubernetes**
   - `kubectl cluster-info`
-  - `kubectl get cs` (API server / scheduler / controller-manager status)
+  - `kubectl get --raw='/readyz?verbose'`
+  - `kubectl get --raw='/livez?verbose'`
 - **OCI**
   - `oci ce cluster get --cluster-id <ocid>`
   - `oci ce cluster-options get --cluster-id <ocid>`
   - `oci logging search` targeting OKE control plane log groups
-- **Normalization tips**: Flag `FAILED` or degraded states, endpoint visibility changes, upgrade operations in progress.
+- **Normalization tips**: Flag readiness or liveness checks returning non-`ok`, endpoint visibility changes, upgrade operations in progress, and capture RBAC/auth errors separately when the raw health endpoints are inaccessible.
 
 ## IAM / RBAC
 - **Kubernetes**

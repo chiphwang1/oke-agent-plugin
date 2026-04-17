@@ -1,7 +1,7 @@
 # PRD — OKE Agent Plugin (Detailed)
 
 ## 1. Overview
-The OKE Agent Plugin is a Claude Code plugin that provides AI-guided workflows for Oracle Kubernetes Engine (OKE). It focuses on three core areas:
+The OKE Agent Plugin is a Claude Code plugin that provides AI-guided workflows for OCI Kubernetes Engine (OKE). It focuses on three core areas:
 - Day‑1 provisioning via Terraform + OCI Resource Manager (ORM) schema generation.
 - Day‑2 incident troubleshooting via evidence correlation across Kubernetes and OCI.
 - Limited Availability (LA) feature enablement for customers, starting with Generic VNIC Attachment (GVA).
@@ -66,7 +66,7 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 - Provide a test deployment manifest to validate GVA functionality.
  - Enforce safety checks before command generation:
    - Require VCN‑Native CNI
-   - `ipCount` ≤ 16
+   - `ipCount` ≤ 256
    - One Application Resource per pod
    - Validate shape/VNIC attachment limits where possible
    - Provide max‑pods guidance when GVA is enabled

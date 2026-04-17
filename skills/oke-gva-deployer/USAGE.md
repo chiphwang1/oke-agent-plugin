@@ -10,13 +10,14 @@ Run the guided menu script:
 ```
 
 The menu:
-- Uses the **cluster name** you enter (defaults to `cluster3`).
+- Uses the **cluster name** you enter. No default cluster is assumed.
 - Pulls cluster OCID from `~/.kube/config` if available.
 - Uses region/tenancy defaults from `~/.oci/config`.
 - Auto-discovers cluster details (compartment, k8s version).
 - Lists VCNs, then subnets, then OKE images for your k8s version.
 - Prompts only for values it cannot discover.
 - Prints a ready-to-run OCI CLI command and a test Deployment manifest.
+- Validates `ipCount` range and rejects discovered secondary subnets that advertise IPv6.
 
 ## Manual Flow (No Menu)
 If you can’t run the menu, follow this sequence:
@@ -41,6 +42,15 @@ This is the preferred fast-path discovery because it scopes queries to the selec
 Constraint:
 - Do not query existing node pools (`oci ce node-pool list/get`) as part of this skill flow.
 - Build the new node pool from cluster metadata, VCN/subnet discovery, image options, and explicit user inputs.
+
+## Preview CLI Resolution
+If you need the preview OCI CLI build for GVA flags, resolve it from the current machine instead of hardcoding a workstation path:
+
+```bash
+bash ./scripts/gva-cli-resolve.sh --json
+source "$(bash ./scripts/gva-cli-resolve.sh --print-activate)"
+python -m pip install --no-deps --force-reinstall "$(bash ./scripts/gva-cli-resolve.sh --print-wheel)"
+```
 
 ## Inputs You Still Need to Provide
 Even with discovery, you must choose:

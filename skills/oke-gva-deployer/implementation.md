@@ -23,7 +23,7 @@ It does not include Terraform module mappings because the source document is CLI
 - **Discovery helper**: `scripts/gva-discover.sh`
 
 ### Discovery Flow
-1. User enters **cluster name** (default `cluster3`).
+1. User enters **cluster name** (no default cluster).
 2. Cluster OCID is resolved from `~/.kube/config` when possible.
 3. Region defaults are pulled from `~/.oci/config`.
 4. `oci ce cluster get --cluster-id <ocid>` retrieves compartment and K8s version.
@@ -35,10 +35,13 @@ It does not include Terraform module mappings because the source document is CLI
 - OKE image list filtered by cluster Kubernetes version.
 - Optional parameters section (only asks for values the user wants).
 - End‑of‑flow action menu: **Run now / Print only / Exit**.
+- `ipCount` validation enforces the documented range of `1..256`.
+- Discovered secondary subnets that advertise IPv6 are rejected for GVA profile selection.
+- Preview CLI activation/wheel paths are resolved from environment or known local locations, not a single hardcoded workstation path.
 
 ## Assumptions
 - GVA is supported only with VCN‑Native CNI (`OCI_VCN_IP_NATIVE`).
-- `ipCount` per secondary VNIC is capped at 16.
+- `ipCount` per secondary VNIC is capped at 256.
 - Pods must request exactly one Application Resource and one unit.
 - Nodes receive a taint that requires pod tolerations.
 
