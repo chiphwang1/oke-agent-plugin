@@ -1,6 +1,7 @@
 # OKE Agent Plugin
 
 A Claude Code plugin for OCI Kubernetes Engine (OKE) on Oracle Cloud Infrastructure (OCI).
+The bundled skills also work with Codex when installed as local Codex skills.
 Fills the gap in AI-assisted Kubernetes tooling.
 
 ## Skills
