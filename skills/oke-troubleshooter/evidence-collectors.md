@@ -62,6 +62,48 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
     - `node_doctor_findings`, `node_doctor_raw_snippet`, `node_doctor_fallback_reason`
     - `node_doctor_counts` (`pass`/`fail`/`warn`/`skip`)
 
+## OKE Add-ons Health
+- **Helper script**
+  - `bash ../../scripts/oke-addon-health.sh --namespace kube-system`
+- **Kubernetes**
+  - `kubectl -n kube-system get pods -o wide`
+  - `kubectl -n kube-system get deploy -o wide`
+  - `kubectl -n kube-system get ds -o wide`
+  - `kubectl -n kube-system get events --field-selector type=Warning --sort-by=.lastTimestamp`
+  - `kubectl -n kube-system logs deployment/coredns --tail=200` when DNS symptoms are present
+- **Normalization tips**: Flag kube-system pods that are not Running/Ready, add-on deployments with unavailable replicas, daemonsets missing scheduled pods, and warning events after cluster upgrades or node pool changes.
+
+## Pod Networking / OCI CNI / IPAM
+- **Helper script**
+  - `bash ../../scripts/oke-pod-network-check.sh --namespace <ns> [--pod <pod>] [--selector <label-selector>]`
+- **Kubernetes**
+  - `kubectl -n <ns> describe pod <pod>`
+  - `kubectl -n <ns> get pod <pod> -o jsonpath='{.metadata.annotations.k8s\.v1\.cni\.cncf\.io/network-status}'`
+  - `kubectl -n <ns> get events --field-selector type=Warning --sort-by=.lastTimestamp`
+  - `kubectl -n kube-system get pods -l app=oci-cni -o wide`
+  - `kubectl -n kube-system get pods -l name=multus -o wide`
+  - `kubectl get network-attachment-definitions -A`
+- **Node-side checks**
+  - Use a privileged diagnostic pod or `kubectl debug node/<node>` only after confirmation.
+  - Inspect `/opt/cni/bin` for required binaries such as `oci-ipam`, `oci-ipvlan`, `oci-ptp`, and `ipvlan`.
+  - Inspect `/dev/shm/oci-cni/free` and `/dev/shm/oci-cni/used` when OCI IPAM allocation state is in question.
+- **Normalization tips**: Separate OCI CNI primary-pod-network failures from Multus secondary-network failures. Flag `FailedCreatePodSandBox`, missing CNI binaries, subnet/IP exhaustion, stale or missing `network-status`, and NAD namespace/name mismatches.
+
+## Cluster Autoscaler / Node Pool Scaling
+- **Helper script**
+  - `bash ../../scripts/oke-autoscaler-check.sh --namespace <ns> [--deployment <deployment>] --cluster-id <cluster_ocid> --compartment-id <compartment_ocid> --region <region>`
+- **Kubernetes**
+  - `kubectl -n <ns> get pods --field-selector=status.phase=Pending -o wide`
+  - `kubectl -n <ns> get events --field-selector reason=FailedScheduling --sort-by=.lastTimestamp`
+  - `kubectl -n kube-system get deploy cluster-autoscaler -o wide`
+  - `kubectl -n kube-system logs deployment/cluster-autoscaler --tail=200`
+  - `kubectl -n <ns> describe deployment <deployment>`
+- **OCI**
+  - `oci ce node-pool list --compartment-id <compartment> --cluster-id <cluster_ocid> --region <region> --all --output json`
+  - `oci ce node-pool get --node-pool-id <nodepool_ocid> --region <region>`
+  - `oci limits resource-availability list --compartment-id <compartment> --service-name compute --region <region>`
+- **Normalization tips**: Distinguish Kubernetes scheduling constraints from autoscaler refusal. Flag max node pool size reached, no matching node group, shape capacity/limit errors, subnet IP exhaustion, taints/tolerations mismatch, and missing autoscaler deployment.
+
 ## Networking / CNI / Load Balancer
 - **Kubernetes**
   - `kubectl get svc -n <ns> <service> -o yaml`
@@ -110,6 +152,90 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - 5xx rate and top failing paths/backends
   - timeout/reset/error signatures
   - highest observed latency fields in the selected window
+
+## DNS / Service Discovery
+- **Helper script**
+  - `bash ../../scripts/oke-dns-check.sh --namespace <ns> [--service <svc>] [--pod <pod>] [--lookup <dns-name>]`
+- **Kubernetes**
+  - `kubectl -n kube-system get pods -l k8s-app=kube-dns -o wide`
+  - `kubectl -n kube-system get deploy coredns -o wide`
+  - `kubectl -n kube-system get configmap coredns -o yaml`
+  - `kubectl -n kube-system logs deployment/coredns --tail=200`
+  - `kubectl -n <ns> get svc <service> -o yaml`
+  - `kubectl -n <ns> get endpoints <service> -o yaml`
+  - `kubectl -n <ns> get endpointslices -l kubernetes.io/service-name=<service> -o yaml`
+  - `kubectl -n <ns> exec <pod> -- nslookup <dns-name>`
+- **Normalization tips**: Separate DNS server health from service object problems. Flag CoreDNS unavailable, ConfigMap rewrite/stub-domain issues, Service without endpoints, EndpointSlice readiness issues, `NXDOMAIN`, `SERVFAIL`, timeout, and pod-local resolver failures.
+
+## Ingress / OCI Native Ingress
+- **Helper script**
+  - `bash ../../scripts/oke-ingress-check.sh --namespace <ns> --ingress <ingress> [--region <region>]`
+- **Kubernetes**
+  - `kubectl get ingressclass -o yaml`
+  - `kubectl -n <ns> get ingress <ingress> -o yaml`
+  - `kubectl -n <ns> describe ingress <ingress>`
+  - `kubectl -n kube-system get pods -l app.kubernetes.io/name=oci-native-ingress-controller -o wide`
+  - `kubectl -n kube-system logs -l app.kubernetes.io/name=oci-native-ingress-controller --tail=200`
+  - `kubectl -n <ns> get secret <tls-secret> -o yaml`
+- **OCI**
+  - `oci lb load-balancer get --load-balancer-id <lb_ocid> --region <region>`
+  - `oci lb listener list --load-balancer-id <lb_ocid> --region <region>`
+  - `oci lb backend-set-health get --load-balancer-id <lb_ocid> --backend-set-name <backend_set> --region <region>`
+- **Normalization tips**: Flag missing ingress class, controller reconciliation errors, TLS secret/certificate mismatch, listener/backend-set mismatch, backend health failures, and annotation drift.
+
+## Private Cluster / API Endpoint Connectivity
+- **Helper script**
+  - `bash ../../scripts/oke-private-endpoint-check.sh --cluster-id <cluster_ocid> --region <region> [--compartment-id <compartment>]`
+- **Kubernetes / workstation**
+  - `kubectl config current-context`
+  - `kubectl cluster-info`
+  - `kubectl get --raw=/readyz?verbose`
+  - `kubectl version`
+- **OCI**
+  - `oci ce cluster get --cluster-id <cluster_ocid> --region <region>`
+  - `oci network subnet get --subnet-id <endpoint_subnet_ocid> --region <region>`
+  - `oci network nsg list --compartment-id <compartment> --region <region>`
+- **Normalization tips**: Separate kubeconfig exec/auth failures from network reachability. Flag expired OCI security tokens, private endpoint DNS/routing problems, NSG/security-list blocks, and public/private endpoint expectation mismatch.
+
+## OCIR / Image Pull
+- **Helper script**
+  - `bash ../../scripts/oke-ocir-image-pull-check.sh --namespace <ns> --pod <pod> [--image <image>] [--compartment-id <compartment>] [--region <image_region>]`
+- **Kubernetes**
+  - `kubectl -n <ns> describe pod <pod>`
+  - `kubectl -n <ns> get secret <image_pull_secret> -o yaml`
+  - `kubectl -n <ns> get serviceaccount <service_account> -o yaml`
+  - `kubectl -n <ns> get events --field-selector involvedObject.name=<pod> --sort-by=.lastTimestamp`
+- **OCI**
+  - `oci artifacts container repository list --compartment-id <compartment> --region <image_region>`
+  - `oci artifacts container image list --compartment-id <compartment> --repository-name <repo> --region <image_region>`
+- **Normalization tips**: Flag image region mismatch, missing namespace-local pull secret, expired auth token, wrong tenancy namespace, repository not found, and node egress/DNS failures to OCIR.
+
+## Workload Identity / OCI API From Pods
+- **Helper script**
+  - `bash ../../scripts/oke-workload-identity-check.sh --namespace <ns> --serviceaccount <service_account> [--pod <pod>] [--tenancy-id <tenancy_ocid>]`
+- **Kubernetes**
+  - `kubectl -n <ns> get serviceaccount <service_account> -o yaml`
+  - `kubectl -n <ns> describe pod <pod>`
+  - `kubectl -n <ns> logs <pod> --tail=200 | egrep -i "notauthorized|forbidden|401|403|principal|workload|token|oci"`
+- **OCI**
+  - `oci iam dynamic-group list --compartment-id <tenancy_ocid> --all`
+  - `oci iam policy list --compartment-id <tenancy_ocid> --all`
+- **Normalization tips**: Flag missing service account annotations, dynamic group rule mismatch, policy statement gaps, token projection failures, and pod code using the wrong OCI auth provider.
+
+## Incident Timeline
+- **Helper script**
+  - `bash ../../scripts/oke-incident-timeline.sh --namespace <ns> [--pod <pod>] [--deployment <deployment>] [--service <service>] [--compartment-id <compartment>] [--region <region>]`
+- **Purpose**
+  - Merge event timing from Kubernetes objects and OCI alarms so the final report can explain what changed first.
+- **Kubernetes**
+  - `kubectl -n <ns> get events --sort-by=.lastTimestamp`
+  - `kubectl -n <ns> describe pod <pod>`
+  - `kubectl -n <ns> rollout history deployment/<deployment>`
+  - `kubectl -n <ns> describe deployment <deployment>`
+  - `kubectl -n <ns> describe service <service>`
+- **OCI**
+  - `oci monitoring alarm-status list-alarms-status --compartment-id <compartment> --status FIRING --region <region> --all`
+- **Normalization tips**: Prefer chronology over volume. Keep warning/failure events, rollout changes, object readiness changes, and firing alarms. Use the timeline to avoid blaming symptoms that occurred after the first failing signal.
 
 ## Application Performance
 - **Kubernetes**

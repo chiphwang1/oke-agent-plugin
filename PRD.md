@@ -5,6 +5,7 @@ An executive-level overview of the OKE Agent Plugin for Claude Code. The plugin 
 - OKE Terraform/ORM stack generation
 - Incident troubleshooting that correlates OCI + Kubernetes evidence
 - Limited Availability (LA) feature enablement for customers (initially Generic VNIC Attachment or GVA)
+- Multi-home pod deployment and validation on GVA-enabled OKE node pools
 
 This PRD reflects the current implementation scope in this repository.
 
@@ -15,6 +16,7 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
 - Deliver a structured workflow for production-ready OKE Terraform and ORM generation.
 - Enable end-to-end OKE incident troubleshooting that correlates Kubernetes symptoms with OCI signals.
 - Provide a guided flow to deploy Limited Availability features, starting with GVA-enabled node pools.
+- Provide a guided flow to validate multi-home workloads using GVA secondary VNICs and Multus.
 - Maintain consistent validation and error handling across the plugin.
 
 ## Non-Goals
@@ -30,7 +32,8 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
 ## User Scenarios
 1. As an operator, I want to generate a Terraform + ORM stack for a new OKE cluster with correct networking, security, and add-ons.
 2. As an on-call engineer, I want to quickly diagnose “pods stuck Pending” by correlating kubectl output with OCI limits and node pool status.
-3. As a platform engineer, I want to deploy a GVA-enabled node pool with correct secondary VNIC profile and verify it with a test deployment.
+3. As a platform engineer, I want to deploy a GVA-enabled node pool with correct secondary VNIC profile and verify it with multi-home test pods.
+4. As an operator, I want to troubleshoot Multus and OCI CNI/IPAM failures when multi-home pods do not receive the expected interfaces.
 
 ## Scope
 ### In Scope
@@ -38,6 +41,7 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
   - `/oke-agent-plugin:oke-cluster-generator`
   - `/oke-agent-plugin:oke-troubleshooter`
   - `/oke-agent-plugin:oke-gva-deployer`
+  - `/oke-agent-plugin:oke-multihome-deployer`
 - Structured, multi-phase dialogue and validation.
 - Evidence collection and hypothesis ranking using subagents.
 - CLI-based discovery and validation scripts.
@@ -54,8 +58,10 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
   - `main.tf`, `variables.tf`, `outputs.tf`, `provider.tf`, `terraform.tfvars.example`, `schema.yaml`
 - Troubleshoot incidents using a symptom triage map that selects diagnostic domains.
 - Collect evidence using curated `kubectl` and `oci` command recipes.
+- Collect OKE-specific evidence for add-ons, OCI CNI/IPAM, Multus, autoscaler, DNS, ingress, OCIR, private endpoint, and workload identity issues.
 - Rank hypotheses with confidence scores and remediation commands.
 - Generate GVA node-pool creation commands and validation manifests.
+- Generate Multus `NetworkAttachmentDefinition` resources and pinned test pods for GVA multi-home validation.
 
 ### Non-Functional Requirements
 - Consistent error contract:
@@ -83,7 +89,13 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
 1. Auto-discover cluster context.
 2. Enumerate VCNs, subnets, and images.
 3. Emit `oci ce node-pool create` command.
-4. Provide validation deployment manifest.
+4. Hand off to the multihome deployer when workload-level Multus validation is required.
+
+### Multihome Deployer
+1. Discover GVA-enabled node pools and referenced subnets.
+2. Generate Multus network attachments and pinned test pods.
+3. Validate pod `eth0` and `net1` interfaces.
+4. Test pod-to-pod connectivity over the secondary interface.
 
 ## Dependencies and Integrations
 - OCI CLI (`oci`) for OKE and infrastructure queries.
@@ -95,6 +107,7 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
 - Troubleshooting session yields a ranked hypothesis and actionable remediation in a single run.
 - Reduction in incident MTTR where OCI-layer signals are required.
 - Successful GVA node pool creation and validation on first attempt.
+- Successful multi-home pod deployment and connectivity validation on first attempt after GVA node pool creation.
 
 ## Competitive Landscape (Strategic)
 - **Market framing:** Hyperscalers are embedding AI assistance inside their consoles and CLI surfaces, primarily focused on diagnostics and guidance rather than full-stack, opinionated workflows.
@@ -113,6 +126,7 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
   - ImagePullBackOff, LoadBalancer pending, PVC Pending, slow deployment, missing OCI CLI, healthy cluster.
 - Verify generated Terraform and ORM schema output for completeness.
 - Confirm GVA node pool creation command succeeds in a test environment.
+- Confirm multi-home test pods receive secondary interfaces and pass pod-to-pod `net1` connectivity checks.
 
 ## Timeline
 - Prototype target: March 10, 2026.

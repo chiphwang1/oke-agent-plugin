@@ -1,0 +1,40 @@
+{
+  "name": "oke-agent-plugin",
+  "version": "0.3.0",
+  "description": "Codex plugin for Oracle Kubernetes Engine: Terraform cluster generation, incident troubleshooting, GVA node pool deployment, and Multus multihome workload validation.",
+  "author": {
+    "name": "chiphwang1",
+    "url": "https://github.com/chiphwang1/oke-agent-plugin"
+  },
+  "homepage": "https://github.com/chiphwang1/oke-agent-plugin",
+  "repository": "https://github.com/chiphwang1/oke-agent-plugin",
+  "license": "MIT",
+  "keywords": [
+    "oracle-cloud",
+    "oci",
+    "oke",
+    "kubernetes",
+    "terraform",
+    "gva",
+    "multus"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "OKE Agent Plugin",
+    "shortDescription": "Generate, troubleshoot, and validate OKE clusters and GVA multihome workloads.",
+    "longDescription": "Reusable Codex skills for Oracle Kubernetes Engine workflows: Terraform and OCI Resource Manager generation, incident troubleshooting, Generic VNIC Attachment node-pool setup, and Multus multihome pod validation.",
+    "developerName": "chiphwang1",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/chiphwang1/oke-agent-plugin",
+    "defaultPrompt": [
+      "Use OKE Agent Plugin to generate an OKE Terraform stack.",
+      "Use OKE Agent Plugin to troubleshoot pods stuck Pending on OKE.",
+      "Use OKE Agent Plugin to deploy and validate GVA multihome pods."
+    ],
+    "brandColor": "#C74634"
+  }
+}

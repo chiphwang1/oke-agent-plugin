@@ -8,6 +8,7 @@ The troubleshooter focuses on:
 - Evidence collection via curated `kubectl` and `oci` commands
 - Hypothesis ranking with remediation guidance
 - Local execution first, with optional agent acceleration when the runtime supports it
+- OKE-specific add-on, CNI/IPAM, autoscaler, DNS, ingress, private endpoint, OCIR, workload identity, and incident timeline paths
 
 ## Current Implementation
 - **Skill spec**: `skills/oke-troubleshooter/SKILL.md`
@@ -16,6 +17,15 @@ The troubleshooter focuses on:
 - **Shared mapping**: `shared/oci-resource-map.md`
 - **Discovery helper**: `scripts/oke-discover.sh`
 - **Optional agents**: `agents/oke-evidence-collector.md`, `agents/oke-hypothesis-analyst.md`, `agents/oke-lb-log-collector.md`
+- **OKE add-on helper**: `scripts/oke-addon-health.sh`
+- **Pod networking helper**: `scripts/oke-pod-network-check.sh`
+- **Autoscaler helper**: `scripts/oke-autoscaler-check.sh`
+- **DNS helper**: `scripts/oke-dns-check.sh`
+- **Ingress helper**: `scripts/oke-ingress-check.sh`
+- **Private endpoint helper**: `scripts/oke-private-endpoint-check.sh`
+- **OCIR image pull helper**: `scripts/oke-ocir-image-pull-check.sh`
+- **Workload identity helper**: `scripts/oke-workload-identity-check.sh`
+- **Incident timeline helper**: `scripts/oke-incident-timeline.sh`
 
 ## Discovery Flow (New)
 1. User provides **cluster name** (or OCID).
@@ -37,7 +47,9 @@ The troubleshooter focuses on:
 ## Known Gaps
 - No automated parsing of kubeconfig context names into region; relies on OCI discovery.
 - No built-in caching; repeated runs re-discover context.
+- Ingress, OCIR, private endpoint, and workload identity helpers collect evidence but do not yet perform full object graph correlation or IAM policy simulation.
 
 ## Follow-up Enhancements
 - Add optional caching of discovery output per session.
 - Add explicit region mismatch checks between kubeconfig and OCI cluster data.
+- Add deeper object graph correlation for OCI native ingress, OCIR image pulls, private endpoint reachability, and workload identity policy simulation.

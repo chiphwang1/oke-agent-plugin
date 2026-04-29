@@ -4,6 +4,24 @@ A Claude Code plugin for OCI Kubernetes Engine (OKE) on Oracle Cloud Infrastruct
 The bundled skills also work with Codex when installed as local Codex skills.
 Fills the gap in AI-assisted Kubernetes tooling.
 
+## Codex Support
+
+This repo is also Codex-friendly:
+
+- `AGENTS.md` gives Codex repository-specific working rules, validation commands, and OKE safety guardrails.
+- `skills/AGENTS.md` gives nested guidance for editing skill packages.
+- `.codex-plugin/plugin.json` exposes this repository as a Codex plugin and points Codex at `./skills/`.
+- `.claude-plugin/plugin.json` remains in place for Claude Code compatibility.
+
+Use the repo with Codex from the repository root. For local validation, run:
+
+```bash
+bash tests/scripts-smoke.sh
+git diff --check
+```
+
+Live OCI/OKE validation still requires a valid OCI CLI session and kubeconfig. The smoke tests are intentionally offline and mocked so Codex cloud or CI can run them without access to a tenancy.
+
 ## Skills
 
 **Implementation Notes:**
@@ -50,10 +68,17 @@ Performs end-to-end diagnosis of OKE incidents by correlating Kubernetes symptom
 
 **Phases:**
 1. **Input & Preflight** — capture symptom, namespace, and verify `kubectl`/`oci` availability.
-2. **Symptom Triage** — map keywords to diagnostic domains (pod runtime, networking, storage, control plane, IAM, OCI limits).
+2. **Symptom Triage** — map keywords to diagnostic domains (pod runtime, OKE add-ons, CNI/IPAM, DNS, autoscaler, networking, storage, control plane, IAM, OCI limits).
 3. **Evidence Collection** — run curated command batches locally by default; use the optional evidence-collector agent only when delegation is available.
 4. **Hypothesis Ranking** — rank causes locally by default; use the optional analyst agent only when delegation is available.
 5. **Report & Next Steps** — present remediation commands, prevention guidance, and note any evidence gaps.
+
+**OKE-specific coverage:**
+- kube-system add-on health: CoreDNS, OCI CNI, CSI, metrics, and daemonset/deployment readiness
+- Pod networking: OCI CNI/IPAM, Multus, NADs, pod sandbox creation, and secondary-interface failures
+- Cluster autoscaler and node-pool scaling: Pending pods, FailedScheduling, scale-up refusal, node pool limits
+- DNS and service discovery: CoreDNS, Service/EndpointSlice state, and pod-local lookups
+- Ingress, private endpoint, OCIR image pulls, workload identity, and incident timeline evidence
 
 **Prerequisites:**
 - `kubectl` configured for the target cluster.
@@ -94,68 +119,116 @@ Deploys OKE node pools configured with Generic VNIC Attachment (GVA), including 
 /oke-agent-plugin:oke-gva-deployer
 ```
 
+### `/oke-agent-plugin:oke-multihome-deployer`
+
+Deploys and validates Multus-based multi-home pods on an OKE node pool that already has GVA secondary VNIC profiles attached.
+
+**Highlights:**
+- Auto-discovers OKE cluster, node pool, placement subnet, and secondary VNIC subnet data
+- Generates Multus `NetworkAttachmentDefinition` resources for default and secondary pod networks
+- Generates pinned netshoot test pods using fully qualified images
+- Verifies pod `network-status`, `eth0`/`net1` interfaces, and pod-to-pod connectivity over `net1`
+- Includes troubleshooting guidance for missing `ipvlan`, CRI-O short-name rejection, OCI IPAM state, and Multus pod sandbox failures
+
+**Prerequisites:**
+- `kubectl` configured for the target cluster
+- OCI CLI authenticated when discovery needs OCI-layer node pool and subnet data
+- Existing GVA-enabled node pool; use `/oke-agent-plugin:oke-gva-deployer` first if the node pool still needs secondary VNIC profiles
+
+**Usage:**
+
+```bash
+/oke-agent-plugin:oke-multihome-deployer
+```
+
 ## Project Structure
 
 ```
 oke-agent-plugin/
+├── AGENTS.md                              # Codex repo instructions
 ├── .claude-plugin/
 │   └── plugin.json                         # Plugin manifest
+├── .codex-plugin/
+│   └── plugin.json                         # Codex plugin manifest
 ├── agents/
 │   ├── oke-evidence-collector.md           # Haiku subagent for command execution
 │   ├── oke-hypothesis-analyst.md           # Sonnet subagent for hypothesis scoring
 │   ├── oke-lb-log-collector.md             # Haiku subagent for LB logging evidence
 ├── settings.json                           # Claude Code settings
 ├── skills/
+│   ├── AGENTS.md                           # Codex skill-editing instructions
 │   ├── oke-cluster-generator/
 │   │   ├── SKILL.md                        # 4-phase orchestration (Pre-flight → Discovery → Summary → Generate)
 │   │   ├── reference.md                    # terraform-oci-oke variable catalog (D1–D6 mapping)
 │   │   └── output-templates/
 │   │       ├── terraform.md                # provider.tf, main.tf, outputs.tf templates
 │   │       └── schema.md                   # ORM schema.yaml structure + conditional visibility patterns
-│   └── oke-troubleshooter/
-│       ├── SKILL.md                        # 5-phase troubleshooting workflow
-│       ├── symptom-triage.md               # Symptom → domain decision table
-│       └── evidence-collectors.md          # Command recipes per diagnostic domain
-│   └── oke-gva-deployer/
-│       ├── SKILL.md                        # GVA node pool workflow
-│       ├── USAGE.md                        # How to use the GVA skill and scripts
-│       ├── implementation.md               # Skill implementation notes
-│       └── references/
-│           └── gva.md                       # Feature summary and constraints
+│   ├── oke-troubleshooter/
+│   │   ├── SKILL.md                        # 5-phase troubleshooting workflow
+│   │   ├── symptom-triage.md               # Symptom → domain decision table
+│   │   └── evidence-collectors.md          # Command recipes per diagnostic domain
+│   ├── oke-gva-deployer/
+│   │   ├── SKILL.md                        # GVA node pool workflow
+│   │   ├── USAGE.md                        # How to use the GVA skill and scripts
+│   │   ├── implementation.md               # Skill implementation notes
+│   │   └── references/
+│   │       └── gva.md                      # Feature summary and constraints
+│   └── oke-multihome-deployer/
+│       ├── SKILL.md                        # Multus multi-home pod workflow after GVA node pool setup
+│       ├── agents/
+│       │   └── openai.yaml                 # Skill UI metadata
+│       ├── references/
+│       │   └── oke-multihome-notes.md      # Known working pattern and failure handling
+│       └── scripts/
+│           ├── discover-oke-multihome.py   # Cluster/node-pool/subnet discovery
+│           └── generate-multihome-manifest.py # NAD and test pod manifest generator
 ├── shared/
 │   └── oci-resource-map.md                 # K8s-to-OCI mapping helper commands
 └── scripts/
     ├── preflight-check.sh                  # OCI CLI auth + tenancy + region + compartment discovery
-    └── validate-cidr.sh                    # CIDR overlap detection (VCN / Pod / Service CIDRs)
-    ├── gva-menu.sh                          # Interactive GVA node-pool builder
+    ├── validate-cidr.sh                    # CIDR overlap detection (VCN / Pod / Service CIDRs)
+    ├── gva-menu.sh                         # Interactive GVA node-pool builder
     ├── gva-discover.sh                      # GVA discovery helper (cluster/VCN/subnet/NSG)
     ├── gva-cli-resolve.sh                   # Resolve preview GVA CLI workspace paths
-    └── oke-discover.sh                      # Troubleshooter cluster discovery helper
-    └── node-doctor-run.sh                   # Node doctor runner via kubectl debug + chroot
+    ├── oke-discover.sh                     # Troubleshooter cluster discovery helper
+    ├── oke-addon-health.sh                 # OKE add-on health collector
+    ├── oke-pod-network-check.sh            # OCI CNI/IPAM and Multus collector
+    ├── oke-autoscaler-check.sh             # Autoscaler and node-pool scaling collector
+    ├── oke-dns-check.sh                    # CoreDNS and service discovery collector
+    ├── oke-ingress-check.sh                # OCI Native Ingress collector
+    ├── oke-private-endpoint-check.sh       # Private API endpoint collector
+    ├── oke-ocir-image-pull-check.sh        # OCIR image pull collector
+    ├── oke-workload-identity-check.sh      # Workload Identity collector
+    ├── oke-incident-timeline.sh            # Kubernetes/OCI timeline collector
+    └── node-doctor-run.sh                  # Node doctor runner via kubectl debug + chroot
 ```
 
 ## Installation
 
-### Claude Code Plugin
+### Claude Code
 
 ```bash
 git clone https://github.com/chiphwang1/oke-agent-plugin.git
 claude --plugin-dir ./oke-agent-plugin
 ```
 
-### Codex Local Skills
-
-This repository does not yet ship a Codex plugin manifest. For Codex, install the skills and their supporting assets into `~/.codex`, preserving the relative layout used by the skill files.
+### Codex
 
 ```bash
 git clone https://github.com/chiphwang1/oke-agent-plugin.git
 cd oke-agent-plugin
+codex "Summarize the active repository instructions and available OKE skills."
+```
 
+The Codex plugin manifest is at `.codex-plugin/plugin.json`. For local skill installation without a plugin workflow, copy the skills and supporting assets into `~/.codex`, preserving the relative layout used by the skill files:
+
+```bash
 mkdir -p ~/.codex/skills ~/.codex/scripts ~/.codex/shared ~/.codex/agents
 
 cp -R skills/oke-cluster-generator ~/.codex/skills/
 cp -R skills/oke-troubleshooter ~/.codex/skills/
 cp -R skills/oke-gva-deployer ~/.codex/skills/
+cp -R skills/oke-multihome-deployer ~/.codex/skills/
 
 cp scripts/*.sh ~/.codex/scripts/
 chmod +x ~/.codex/scripts/*.sh
@@ -180,6 +253,7 @@ Configure OKE Generic VNIC Attachment for this cluster
 ```
 
 If you update this repo later, reinstall the changed folders into `~/.codex` so Codex sees the latest skill definitions and helper scripts.
+For local plugin-directory testing, add the repository as a local marketplace source or install it from the GitHub repository using your Codex plugin workflow.
 
 ## Error Handling
 
@@ -211,6 +285,15 @@ Manually validate the plugin with the following flows:
 - **PVC Pending:** Block storage quota reached; expect storage hypothesis citing CSI controller logs and OCI Block Volume availability.
 - **Missing OCI CLI:** Temporarily hide the OCI CLI binary; ensure the report warns about limited coverage yet still surfaces Kubernetes-only insights.
 - **Healthy cluster:** Provide a benign symptom (e.g., `check cluster health`); confirm low-confidence hypotheses with recommendations for continued monitoring.
+- **GVA multihome validation:** Run `/oke-agent-plugin:oke-multihome-deployer` against a GVA-enabled node pool; confirm generated pods expose `eth0` and `net1`, and that peer pods can ping over their `net1` addresses.
+- **OKE add-on failure:** Break or scale down CoreDNS, run `/oke-troubleshooter "DNS timeouts in prod"`, and confirm it collects CoreDNS/add-on evidence.
+- **Autoscaler no-scale:** Create a Pending workload, run `/oke-troubleshooter "cluster autoscaler is not adding nodes"`, and confirm it surfaces FailedScheduling and autoscaler refusal signals.
+- **Pod sandbox / CNI:** Trigger a CNI or Multus pod sandbox failure, run `/oke-troubleshooter "FailedCreatePodSandBox with OCI CNI"`, and confirm it checks OCI CNI, Multus, NADs, and pod events.
+- **Private API endpoint:** Run `/oke-troubleshooter "private OKE API endpoint unreachable"` and confirm it checks kubeconfig, API readiness, OKE cluster metadata, and NSGs.
+- **OCIR image pull:** Run `/oke-troubleshooter "OCIR ImagePullBackOff unauthorized"` and confirm it checks pod events, image pull secrets, service accounts, and OCIR repositories.
+- **Workload Identity:** Run `/oke-troubleshooter "pod gets NotAuthorized from OCI API"` and confirm it checks service account, pod logs, dynamic groups, and IAM policies.
+- **OCI Native Ingress:** Run `/oke-troubleshooter "OCI native ingress backend TLS errors"` and confirm it checks ingress class, Ingress object, controller logs, and backend/listener signals.
+- **Incident timeline:** Run `/oke-troubleshooter "build incident timeline for prod web"` and confirm it merges Kubernetes events, rollout history, object descriptions, and OCI alarms.
 
 ## References
 

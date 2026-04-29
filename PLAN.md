@@ -33,9 +33,13 @@ Rationale: `oci` CLI and `kubectl` are already on the user's PATH. Claude's Bash
 
 ```
 oke-agent-plugin/
+├── AGENTS.md                         # Codex repository instructions
 ├── .claude-plugin/
 │   └── plugin.json                    # Plugin manifest (name, version, skills/agents/hooks dirs)
+├── .codex-plugin/
+│   └── plugin.json                    # Codex plugin manifest
 ├── skills/
+│   ├── AGENTS.md                      # Codex skill-editing rules
 │   ├── oke-cluster-generator/         # Skill 1: Terraform Cluster Generator
 │   │   ├── SKILL.md                   # Main entrypoint — adapted from oke-terraform-stack-builder
 │   │   ├── reference.md               # terraform-oci-oke variable catalog (D1–D6 mapping)
@@ -53,12 +57,21 @@ oke-agent-plugin/
 │   │       ├── collect-k8s-state.sh   # Batch kubectl evidence (--namespace, --domain)
 │   │       ├── collect-oci-state.sh   # Batch OCI CLI evidence (--compartment-id, --domain)
 │   │       └── check-connectivity.sh  # Node/endpoint reachability
-│   └── oke-gva-deployer/              # Skill 3: GVA Node Pool Deployer
-│       ├── SKILL.md                   # Guided GVA workflow and guardrails
-│       ├── USAGE.md                   # Operator usage guide
-│       ├── implementation.md          # Skill implementation notes
-│       └── references/
-│           └── gva.md                 # Feature constraints + examples
+│   ├── oke-gva-deployer/              # Skill 3: GVA Node Pool Deployer
+│   │   ├── SKILL.md                   # Guided GVA workflow and guardrails
+│   │   ├── USAGE.md                   # Operator usage guide
+│   │   ├── implementation.md          # Skill implementation notes
+│   │   └── references/
+│   │       └── gva.md                 # Feature constraints + examples
+│   └── oke-multihome-deployer/        # Skill 4: Multus Multi-Home Workload Deployer
+│       ├── SKILL.md                   # Post-GVA multihome pod workflow
+│       ├── agents/
+│       │   └── openai.yaml            # Skill UI metadata
+│       ├── references/
+│       │   └── oke-multihome-notes.md # Known working pattern and failures
+│       └── scripts/
+│           ├── discover-oke-multihome.py
+│           └── generate-multihome-manifest.py
 ├── agents/
 │   ├── oke-evidence-collector.md      # Haiku subagent: parallel evidence collection
 │   ├── oke-hypothesis-analyst.md      # Sonnet subagent: RCA and hypothesis ranking
@@ -148,12 +161,21 @@ oke-agent-plugin/
 **Key files:**
 - `skills/oke-troubleshooter/SKILL.md` — 4-step orchestration with `context: fork`
 - `skills/oke-troubleshooter/symptom-triage.md` — decision table (e.g., "pods pending" → Scheduling + Node Health + Storage)
-- `skills/oke-troubleshooter/evidence-collectors.md` — domain recipes for Pod, Node, CNI, LB, Storage, IAM, Control Plane
+- `skills/oke-troubleshooter/evidence-collectors.md` — domain recipes for Pod, Node, OKE add-ons, OCI CNI/IPAM, autoscaler, DNS, CNI, LB, Storage, IAM, Control Plane
 - `agents/oke-evidence-collector.md` — Haiku subagent for parallel evidence (k8s layer + OCI layer simultaneously)
 - `agents/oke-hypothesis-analyst.md` — Sonnet subagent for scoring hypotheses 0–10 with evidence quotes
 - `shared/oci-resource-map.md` — Node→Instance, LoadBalancer Service→OCI LB, PV→Block Volume mappings
+- `scripts/oke-addon-health.sh` — kube-system add-on readiness and warning collector
+- `scripts/oke-pod-network-check.sh` — pod sandbox, OCI CNI/IPAM, Multus, and NAD collector
+- `scripts/oke-autoscaler-check.sh` — Pending pod, cluster-autoscaler, and OKE node-pool collector
+- `scripts/oke-dns-check.sh` — CoreDNS, Service, EndpointSlice, and pod lookup collector
+- `scripts/oke-ingress-check.sh` — OCI Native Ingress and controller collector
+- `scripts/oke-private-endpoint-check.sh` — private API endpoint and kubeconfig reachability collector
+- `scripts/oke-ocir-image-pull-check.sh` — OCIR image pull, secret, and repository collector
+- `scripts/oke-workload-identity-check.sh` — service account, dynamic group, and IAM policy collector
+- `scripts/oke-incident-timeline.sh` — Kubernetes event, rollout, object, and OCI alarm timeline collector
 
-**Hypothesis domains:** Pod scheduling, Pod runtime, Networking (CNI/LB/NSG), Storage (CSI), Node health, OCI infra, Control plane, IAM/RBAC.
+**Hypothesis domains:** Pod scheduling, Pod runtime, OKE add-ons, Pod Networking / OCI CNI / IPAM, Cluster Autoscaler / Node Pool Scaling, DNS / Service Discovery, Networking (CNI/LB/NSG), Ingress / OCI Native Ingress, Storage (CSI), Node health, OCI infra, Control plane, Private Cluster / API Endpoint Connectivity, OCIR / Image Pull, Workload Identity / OCI API From Pods, IAM/RBAC.
 
 **Output:** Ranked top-3 hypotheses with evidence quotes + remediation commands + prevention recommendations.
 
@@ -172,6 +194,22 @@ oke-agent-plugin/
 - `scripts/gva-discover.sh` and `scripts/gva-menu.sh` — helper automation
 
 **Reference:** OKE GVA documentation and OCI CLI node-pool operations.
+
+---
+
+### Skill 4 — Multus Multi-Home Workload Deployer (`/oke-multihome-deployer`)
+
+**Flow:** Confirm existing GVA node pool → discover cluster/node-pool/subnet data → verify Multus and CNI prerequisites → generate NAD and test pod manifests → validate pod interfaces and connectivity.
+
+**Key files:**
+- `skills/oke-multihome-deployer/SKILL.md` — post-GVA multihome workflow
+- `skills/oke-multihome-deployer/scripts/discover-oke-multihome.py` — OCI/Kubernetes discovery helper
+- `skills/oke-multihome-deployer/scripts/generate-multihome-manifest.py` — NAD and pinned test pod manifest generator
+- `skills/oke-multihome-deployer/references/oke-multihome-notes.md` — known working pattern and troubleshooting notes
+
+**Output:** Multus `NetworkAttachmentDefinition` resources, pinned test pods, verification commands, and targeted remediation for `ipvlan`, CRI-O image-name, OCI IPAM, and Multus sandbox failures.
+
+**Reference:** OKE GVA node pools, Multus thick plugin, OCI CNI/IPAM, and NetworkAttachmentDefinition behavior.
 
 ---
 
@@ -197,6 +235,8 @@ All scripts: exit 0 (success), exit 1 (expected error), exit 2 (unexpected). Emi
 
 **Adding a new skill:** Create `skills/<new-skill-name>/SKILL.md` + supporting files. Skills are auto-discovered from `skills/` directory. Bump minor version in `plugin.json`. No manifest changes needed.
 
+**Codex compatibility:** Keep root `AGENTS.md`, nested `skills/AGENTS.md`, and `.codex-plugin/plugin.json` current with every skill capability change. Keep `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` versions aligned.
+
 **Future MCP server:** Add `servers/oke-watch-server/` (Go, stdio transport) + entry in `.mcp.json`. Existing skills unaffected.
 
 **Versioning:** semver. MAJOR = breaking skill name or script contract changes. MINOR = new skill added. PATCH = content/script bug fixes.
@@ -211,16 +251,20 @@ All scripts: exit 0 (success), exit 1 (expected error), exit 2 (unexpected). Emi
 | 1: Skill 1 | `/oke-cluster-generator` produces validated Terraform bundle | Week 1 |
 | 2: Skill 2 | `/oke-troubleshooter` produces ranked hypothesis report | Week 2 |
 | 3: Skill 3 | `/oke-gva-deployer` produces validated node-pool create command and test manifest | Week 3 |
-| 4: Integration | All 3 skills tested, audit log verified, README complete, v0.1.0 tagged | Week 4 |
+| 4: Skill 4 | `/oke-multihome-deployer` produces Multus NADs, test pods, and connectivity checks | Week 4 |
+| 5: Integration | All skills tested, audit log verified, README complete, release tagged | Week 5 |
 
 ---
 
 ## Verification
 
-- **Plugin load:** `claude --plugin-dir . --debug 2>&1 | grep -E "(plugin|skill|hook)"` — all 3 skills appear
+- **Plugin load:** `claude --plugin-dir . --debug 2>&1 | grep -E "(plugin|skill|hook)"` — all skills appear
+- **Codex instructions:** Run `codex "Summarize the active repository instructions and available OKE skills."` from the repo root and confirm it uses `AGENTS.md`.
 - **Skill 1:** Run `/oke-cluster-generator "private cluster, 3 node pools"` → verify 4 Terraform files generated + preflight report
 - **Skill 2:** Deliberately break a pod (wrong image) → run `/oke-troubleshooter "pods in ImagePullBackOff"` → verify ImagePullBackOff is top hypothesis with evidence quote
+- **Skill 2 OKE-specific:** Run `/oke-troubleshooter "cluster autoscaler is not adding nodes"` and `/oke-troubleshooter "DNS timeouts"` → verify helper scripts return structured evidence
 - **Skill 3:** Run `/oke-gva-deployer` → verify cluster/subnet/NSG discovery and generated node-pool command
+- **Skill 4:** Run `/oke-multihome-deployer` → verify generated pods expose `eth0` and `net1`, then ping peer pods over `net1`
 - **Audit log:** After each skill run, inspect `~/.claude/oke-agent-audit.log` — confirm no credentials appear
 - **Script unit tests:** `bats tests/scripts/` — all pass
 

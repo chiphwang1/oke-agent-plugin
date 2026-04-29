@@ -1,0 +1,4 @@
+interface:
+  display_name: "OKE Multihome Deployer"
+  short_description: "Auto-discover OKE node pools and subnets, then deploy Multus multihome networking."
+  default_prompt: "Auto-discover OKE cluster node pools and subnets, then deploy or troubleshoot multihome networking with GVA secondary VNICs, Multus, and NetworkAttachmentDefinitions."

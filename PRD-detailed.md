@@ -5,6 +5,7 @@ The OKE Agent Plugin is a Claude Code plugin that provides AI-guided workflows f
 - Day‑1 provisioning via Terraform + OCI Resource Manager (ORM) schema generation.
 - Day‑2 incident troubleshooting via evidence correlation across Kubernetes and OCI.
 - Limited Availability (LA) feature enablement for customers, starting with Generic VNIC Attachment (GVA).
+- Multi-home workload deployment and validation on GVA-enabled OKE node pools.
 
 This document is a detailed PRD intended for product, engineering, and delivery teams.
 
@@ -13,6 +14,7 @@ This document is a detailed PRD intended for product, engineering, and delivery 
 - Reduce time-to-provision for OKE clusters by delivering an opinionated, guided IaC generation flow.
 - Reduce incident MTTR by providing structured troubleshooting with evidence-backed hypotheses.
 - Provide a repeatable and safe workflow for enabling LA features, beginning with GVA.
+- Provide a repeatable workflow for validating Multus multi-home pods after GVA node pool creation.
 
 ### Secondary Objectives
 - Standardize OKE operational playbooks into deterministic, auditable workflows.
@@ -31,6 +33,7 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 - `/oke-agent-plugin:oke-cluster-generator`
 - `/oke-agent-plugin:oke-troubleshooter`
 - `/oke-agent-plugin:oke-gva-deployer`
+- `/oke-agent-plugin:oke-multihome-deployer`
 - OCI CLI and `kubectl` integration for discovery and evidence.
 - Structured error handling and validation.
 
@@ -53,6 +56,7 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 - Accept free‑form symptom input.
 - Triage symptoms to diagnostic domains (pod runtime, networking, storage, control plane, IAM, OCI limits, application performance).
 - Collect evidence with curated `kubectl` and `oci` commands.
+- Collect OKE-specific evidence for add-on health, OCI CNI/IPAM, Multus, cluster-autoscaler, DNS/service discovery, ingress, OCIR image pulls, private endpoint connectivity, and workload identity.
 - Invoke subagents to normalize evidence and rank hypotheses with confidence scores.
 - Output actionable remediation steps and prevention guidance.
 
@@ -70,6 +74,13 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
    - One Application Resource per pod
    - Validate shape/VNIC attachment limits where possible
    - Provide max‑pods guidance when GVA is enabled
+
+### 6.4 Multihome Deployer
+- Discover OKE cluster, node pool, placement subnet, and GVA secondary VNIC subnet data.
+- Generate Multus `NetworkAttachmentDefinition` resources for default and secondary pod networks.
+- Generate pinned netshoot test pods with fully qualified images.
+- Validate pod `network-status`, `eth0` and `net1` interfaces, and pod-to-pod connectivity over the secondary interface.
+- Provide troubleshooting guidance for missing CNI binaries, OCI IPAM state, CRI-O short-name enforcement, and Multus pod sandbox failures.
 
 ## 7. Non‑Functional Requirements
 - **Error Contract:**
@@ -104,7 +115,13 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 1. Auto‑discovery.
 2. Resource selection (VCN, subnet, image).
 3. Command generation.
-4. Validation deployment.
+4. Handoff to multihome validation.
+
+### 8.4 Multihome Validation Flow
+1. Discover GVA-enabled node pools and referenced subnets.
+2. Verify Multus and node-side CNI prerequisites.
+3. Generate and apply NAD plus test pod manifests.
+4. Confirm `eth0`/`net1` addressing and `net1` peer connectivity.
 
 ## 9. Dependencies and Integrations
 - OCI CLI (`oci`).
@@ -122,10 +139,17 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 
 ### LA Feature Deployer (GVA)
 - Generates a syntactically valid `oci ce node-pool create` command.
-- Validation manifest deploys successfully in test environment.
+- Handoff guidance identifies when to run multihome workload validation.
  - Success signals:
    - GVA extended resources appear on nodes.
-   - Test pod schedules and runs with required toleration and Application Resource.
+   - Node pool exposes expected secondary VNIC profiles.
+
+### Multihome Deployer
+- Generated NAD and pod manifest applies successfully in a test environment.
+- Success signals:
+  - Test pods schedule onto GVA-enabled nodes.
+  - Pods expose `eth0` and `net1`.
+  - Peer pods can ping over the `net1` addresses.
 
 ## 11. Success Metrics
 - 50% reduction in time to produce initial Terraform/ORM assets.

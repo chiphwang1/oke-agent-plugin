@@ -19,6 +19,15 @@ Scripts rely on the global error contract: exit 0 success, exit 1 expected issue
 
 Helper scripts:
 - `../../scripts/oke-discover.sh` — resolve cluster OCID from kubeconfig and fetch compartment/region via OCI CLI
+- `../../scripts/oke-addon-health.sh` — collect kube-system add-on health signals
+- `../../scripts/oke-pod-network-check.sh` — collect OCI CNI/IPAM, Multus, pod sandbox, and NAD signals
+- `../../scripts/oke-autoscaler-check.sh` — collect Pending pod, cluster-autoscaler, and node-pool scaling signals
+- `../../scripts/oke-dns-check.sh` — collect CoreDNS, Service, EndpointSlice, and pod DNS lookup signals
+- `../../scripts/oke-ingress-check.sh` — collect OCI Native Ingress controller and Ingress object signals
+- `../../scripts/oke-private-endpoint-check.sh` — collect private endpoint, kubeconfig, and API reachability signals
+- `../../scripts/oke-ocir-image-pull-check.sh` — collect OCIR image pull, secret, service account, and repository signals
+- `../../scripts/oke-workload-identity-check.sh` — collect service account, pod log, dynamic group, and IAM policy signals
+- `../../scripts/oke-incident-timeline.sh` — merge Kubernetes events, rollout history, object descriptions, and OCI alarms into a timeline
 
 ---
 
@@ -30,10 +39,10 @@ Helper scripts:
 - Normalize local evidence to the same JSON shape documented in `evidence-collectors.md`.
 
 ## Phase 0 — Input & Preflight
-1. **Parse Arguments**  
-   - `$ARGUMENTS` holds an optional symptom string. If empty, ask the user for a concise description (e.g., `"pods stuck Pending in prod namespace"`).  
+1. **Parse Arguments**
+   - `$ARGUMENTS` holds an optional symptom string. If empty, ask the user for a concise description (e.g., `"pods stuck Pending in prod namespace"`).
    - Extract namespace hints (`-n`, `namespace:`) and resource names when present.
-2. **Auto-Discover Cluster Context**  
+2. **Auto-Discover Cluster Context**
    - Ask for **cluster name** if not provided.
    - First list kubeconfig contexts to identify managed clusters and current context:
      ```bash
@@ -57,12 +66,12 @@ Helper scripts:
      - Do not run baseline checks, inventory commands, or evidence collection against any other cluster.
      - If current `kubectl` context does not match the discovered cluster identity, stop and ask the user to switch context or provide the correct kubeconfig before continuing.
      - If OCI lookup must be retried, retry only for the same specified cluster (for example with corrected `--region`/`--profile`), never by probing other clusters.
-3. **Confirm Context**  
+3. **Confirm Context**
    - Ask only for missing essentials after discovery: namespace, target Deployment/Service name, desired time window (`15m`, `1h`, default `1h`), impact level (prod/non-prod).
-4. **Tool Availability Checks**  
-   - Run `kubectl version --client` and `oci --version`.  
+4. **Tool Availability Checks**
+   - Run `kubectl version --client` and `oci --version`.
    - Record `KUBECTL_AVAILABLE`/`OCI_AVAILABLE` booleans. If a CLI is missing, inform the user that evidence will be partial and continue with available tools.
-5. **Session State**  
+5. **Session State**
    - Initialize state structure:
      ```json
      {
@@ -133,8 +142,8 @@ Helper scripts:
 ## Phase 3 — Evidence Collection
 1. For each selected domain:
    - Look up required commands in `evidence-collectors.md`.
-   - Build command batches with placeholders filled (namespace, resource names, compartment OCID, time window, and dependency hop identifiers when present).  
-   - **Auto-run read-only evidence commands without prompting** when tools are available.  
+   - Build command batches with placeholders filled (namespace, resource names, compartment OCID, time window, and dependency hop identifiers when present).
+   - **Auto-run read-only evidence commands without prompting** when tools are available.
    - Only ask for confirmation before **potentially disruptive** actions (restarts, scaling, drains).
    - Example command item:
      ```json
@@ -154,6 +163,44 @@ Helper scripts:
    - Merge collector output into session evidence:
      - `lb_ocid`, `logging_status`, `logging_status_source`, `log_findings`, `anomalies`, `fallback_used`
    - If collector reports fallback/timeouts, continue with Kubernetes networking evidence and call out OCI visibility gap in the report.
+   - For OKE-specific domains, prefer the dedicated helper script before generic command batches:
+     - OKE Add-ons Health:
+       ```bash
+       bash ../../scripts/oke-addon-health.sh --namespace kube-system
+       ```
+     - Pod Networking / OCI CNI / IPAM:
+       ```bash
+       bash ../../scripts/oke-pod-network-check.sh --namespace <ns> [--pod <pod>] [--selector <label-selector>]
+       ```
+     - Cluster Autoscaler / Node Pool Scaling:
+       ```bash
+       bash ../../scripts/oke-autoscaler-check.sh --namespace <ns> [--deployment <deployment>] --cluster-id <cluster_ocid> --compartment-id <compartment_ocid> --region <region>
+       ```
+     - DNS / Service Discovery:
+       ```bash
+       bash ../../scripts/oke-dns-check.sh --namespace <ns> [--service <service>] [--pod <pod>] [--lookup <dns-name>]
+       ```
+     - Ingress / OCI Native Ingress:
+       ```bash
+       bash ../../scripts/oke-ingress-check.sh --namespace <ns> --ingress <ingress> [--region <region>]
+       ```
+     - Private Cluster / API Endpoint Connectivity:
+       ```bash
+       bash ../../scripts/oke-private-endpoint-check.sh --cluster-id <cluster_ocid> --region <region> [--compartment-id <compartment_ocid>]
+       ```
+     - OCIR / Image Pull:
+       ```bash
+       bash ../../scripts/oke-ocir-image-pull-check.sh --namespace <ns> --pod <pod> [--image <image>] [--compartment-id <compartment_ocid>] [--region <image_region>]
+       ```
+     - Workload Identity / OCI API From Pods:
+       ```bash
+       bash ../../scripts/oke-workload-identity-check.sh --namespace <ns> --serviceaccount <sa> [--pod <pod>] [--tenancy-id <tenancy_ocid>]
+       ```
+     - Incident Timeline:
+       ```bash
+       bash ../../scripts/oke-incident-timeline.sh --namespace <ns> [--pod <pod>] [--deployment <deployment>] [--service <service>] [--compartment-id <compartment_ocid>] [--region <region>]
+       ```
+   - Treat helper JSON output as evidence with fields: `domain`, `findings`, `anomalies`, `raw_snippets`, and `fallback_used`.
    - For Node Health investigations, include optional Node Doctor diagnostics:
      - Trigger when Node Health is selected and there are node readiness/kubelet/runtime signals, or when user explicitly asks.
      - Scope starts with one candidate node first, then ask whether to continue to additional nodes.
@@ -223,10 +270,10 @@ Helper scripts:
 
 ## Phase 5 — Report & Next Steps
 1. Present a structured report:
-   - Table of top hypotheses with scores.  
-   - Highlight confidence level (e.g., `High`, `Medium`, `Low` based on score thresholds).  
+   - Table of top hypotheses with scores.
+   - Highlight confidence level (e.g., `High`, `Medium`, `Low` based on score thresholds).
    - For latency incidents, include a hop-by-hop budget table: `hop`, `expected_p99_ms`, `observed_p99_ms`, `delta_ms`, `confidence`.
-   - Remediation commands rendered in fenced code blocks, prefixed with comments where necessary.  
+   - Remediation commands rendered in fenced code blocks, prefixed with comments where necessary.
    - Prevention recommendations as concise bullet points.
 2. Call out any limitations: missing tooling, commands that failed, domains not yet explored, and missing dependency telemetry.
 3. Offer next actions:
@@ -251,10 +298,17 @@ Helper scripts:
 ---
 
 ## Invocation Examples
-- `/oke-troubleshooter "pods stuck Pending in prod namespace"`  
-- `/oke-troubleshooter "lb service has no IP us-phoenix-1"`  
-- `/oke-troubleshooter "cluster api timing out"`  
-- `/oke-troubleshooter "customer is indicating poor performance for deployment"`  
+- `/oke-troubleshooter "pods stuck Pending in prod namespace"`
+- `/oke-troubleshooter "lb service has no IP us-phoenix-1"`
+- `/oke-troubleshooter "cluster api timing out"`
+- `/oke-troubleshooter "customer is indicating poor performance for deployment"`
+- `/oke-troubleshooter "CoreDNS timeouts in prod"`
+- `/oke-troubleshooter "cluster autoscaler is not adding nodes"`
+- `/oke-troubleshooter "pods fail sandbox creation with OCI CNI IPAM errors"`
+- `/oke-troubleshooter "OCIR ImagePullBackOff unauthorized"`
+- `/oke-troubleshooter "workload identity pod gets NotAuthorized"`
+- `/oke-troubleshooter "private OKE API endpoint unreachable"`
+- `/oke-troubleshooter "OCI native ingress TLS backend errors"`
 
 ## Latency Walkthrough (Dependency-Aware)
 Use this pattern when the incident is "deployment is slow" and the deployment depends on other services.
