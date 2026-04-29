@@ -21,6 +21,7 @@ Source: `gva-documentation_1_14.docx` (Document Version 1.0, Last Updated Decemb
 ## Prerequisites
 - OKE cluster with **VCN-Native CNI** (GVA not supported on Flannel).
 - Subnets and NSGs per workload tier.
+- Each GVA secondary subnet must be IPv4-only and have more than one IPv4 CIDR block.
 - Node pool permissions to create/manage VNICs.
 
 ## Constraints and Limits
@@ -47,7 +48,7 @@ Use as `--secondary-vnics '<json>'` in CLI.
 [
   {
     "createVnicDetails": {
-      "ipCount": 16,
+      "ipCount": 256,
       "applicationResources": ["Frontend"],
       "assignPublicIp": false,
       "displayName": "vnic-frontend",
@@ -79,6 +80,6 @@ spec:
 ```
 
 ## max-pods Guidance
-- GVA reduces per-interface pod capacity (16 IPs per VNIC).
+- GVA reduces per-interface pod capacity (256 IPs per VNIC).
 - Set kubelet `max-pods` via cloud-init accordingly.
 - HostNetwork pods still count toward max-pods.

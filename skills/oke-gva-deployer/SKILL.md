@@ -138,6 +138,7 @@ Compatibility guardrails:
 - If there is a mismatch (for example ARM image with x86 shape), stop and ask user to change either image or shape.
 - Build one profile per secondary VNIC entry collected in step 9/10.
 - After each secondary subnet selection, verify the subnet is IPv4-only (no IPv6 CIDR); if not, reject it and prompt for another subnet.
+- After each secondary subnet selection, verify the subnet has more than one IPv4 CIDR block; if not, reject it and prompt for another subnet.
 
 Automation option:
 - If user asks to use scripts, you may run:
@@ -162,6 +163,7 @@ Validate:
 - Each `applicationResource` is unique.
 - Total IPs across VNICs fits expected pod count + buffer.
 - Subnets align with intended traffic isolation.
+- Each GVA secondary subnet is IPv4-only and has more than one IPv4 CIDR block.
 
 ## Phase 3b — Required Variable Checklist (Always Collect)
 Before generating create/update commands, collect and confirm:

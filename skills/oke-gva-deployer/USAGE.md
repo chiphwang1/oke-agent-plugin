@@ -18,7 +18,7 @@ The menu:
 - Prompts for fresh mutable node-pool inputs on each new create flow.
 - Ignores old saved JSON payload files for new node-pool creation.
 - Prints a ready-to-run OCI CLI command and a test Deployment manifest.
-- Validates `ipCount` range and rejects discovered secondary subnets that advertise IPv6.
+- Validates `ipCount` range and only lists discovered secondary subnets that are IPv4-only with more than one IPv4 CIDR block.
 
 ## Manual Flow (No Menu)
 If you can’t run the menu, follow this sequence:
@@ -62,6 +62,7 @@ Even with discovery, you must choose:
 - Node count
 - Node placement subnet (from VCN list)
 - GVA VNIC profiles (subnet, applicationResource, ipCount)
+- Each GVA secondary subnet must be IPv4-only and have more than one IPv4 CIDR block
 - Image (from the menu list)
 
 Always confirm additional GVA variables:

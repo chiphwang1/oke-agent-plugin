@@ -181,6 +181,7 @@ fi
 
 cluster_k8s=""
 subnet_lines=()
+secondary_subnet_lines=()
 nsg_lines=()
 vcn_lines=()
 
@@ -328,7 +329,8 @@ fi
 
 if [[ -n "$vcn_id" ]]; then
   subnet_lines=()
-  subnet_json=$(oci network subnet list --compartment-id "$compartment_ocid" --vcn-id "$vcn_id" --region "$region" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block","ipv6":"ipv6-cidr-blocks"}' --output json 2>/dev/null || true)
+  secondary_subnet_lines=()
+  subnet_json=$(oci network subnet list --compartment-id "$compartment_ocid" --vcn-id "$vcn_id" --region "$region" --query 'data[*].{"name":"display-name","id":"id","cidr":"cidr-block","ipv4Cidrs":"ipv4-cidr-blocks","ipv6":"ipv6-cidr-blocks"}' --output json 2>/dev/null || true)
   if [[ -n "$subnet_json" && "$subnet_json" != "[]" ]]; then
     read_lines_into_array subnet_lines < <(python3 - "$subnet_json" <<'PY'
 import json,sys
@@ -344,6 +346,23 @@ for s in d.get('data', d) if isinstance(d, dict) else d:
     ipv6_status='has-ipv6' if ipv6 else 'ipv4-only'
     if name and sid:
         print(f"{name} | {cidr} | {ipv6_status} | {sid}")
+PY
+    )
+    read_lines_into_array secondary_subnet_lines < <(python3 - "$subnet_json" <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.argv[1])
+except Exception:
+    d={}
+for s in d.get('data', d) if isinstance(d, dict) else d:
+    name=s.get('name') or s.get('display-name') or ''
+    sid=s.get('id') or ''
+    cidr=s.get('cidr') or s.get('cidr-block') or ''
+    ipv6=s.get('ipv6') or s.get('ipv6-cidr-block')
+    ipv4_cidrs=s.get('ipv4Cidrs') or s.get('ipv4-cidr-blocks') or []
+    cidr_count=len(ipv4_cidrs) if isinstance(ipv4_cidrs, list) else 0
+    if name and sid and not ipv6 and cidr_count > 1:
+        print(f"{name} | {cidr} | {sid}")
 PY
     )
   fi
@@ -462,22 +481,17 @@ while true; do
   subnet_id=""
   subnet_summary=""
   while [[ -z "$subnet_id" ]]; do
-    if [[ ${#subnet_lines[@]} -gt 0 ]]; then
-      selection=$(select_from_list "  Select subnet for this profile:" "yes" "${subnet_lines[@]}")
+    if [[ ${#secondary_subnet_lines[@]} -gt 0 ]]; then
+      selection=$(select_from_list "  Select subnet for this profile (IPv4-only, >1 IPv4 CIDR block):" "yes" "${secondary_subnet_lines[@]}")
       if [[ -n "$selection" ]]; then
-        subnet_ipv6_state=$(line_field "$selection" 3)
-        if [[ "$subnet_ipv6_state" != "ipv4-only" ]]; then
-          say "  Selected subnet advertises IPv6 and cannot be used for a GVA secondary VNIC. Choose an IPv4-only subnet."
-          continue
-        fi
-        subnet_id=$(line_field "$selection" 4)
+        subnet_id=$(line_field "$selection" 3)
         subnet_summary="$(line_field "$selection" 1) ($(line_field "$selection" 2))"
       fi
     fi
     if [[ -z "$subnet_id" ]]; then
-      subnet_id=$(ask "  subnetId OCID: ")
+      subnet_id=$(ask "  subnetId OCID (must be IPv4-only and have >1 IPv4 CIDR block): ")
       if [[ -n "$subnet_id" ]]; then
-        say "  Manual subnet entry cannot be IPv6-validated. Ensure the subnet is IPv4-only."
+        say "  Manual subnet entry cannot be OCI-validated. Ensure the subnet is IPv4-only and has more than one IPv4 CIDR block."
         subnet_summary="$subnet_id"
       fi
     fi
@@ -641,7 +655,8 @@ for p in "${profile_summaries[@]}"; do
  done
 
 confirm_generate=$(ask "Generate a create command with these values? (y/N): ")
-if [[ "${confirm_generate,,}" != "y" && "${confirm_generate,,}" != "yes" ]]; then
+confirm_generate=$(lower "$confirm_generate")
+if [[ "$confirm_generate" != "y" && "$confirm_generate" != "yes" ]]; then
   say "Aborted before command generation."
   exit 0
 fi

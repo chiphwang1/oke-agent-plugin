@@ -552,7 +552,7 @@ run_test_gva_menu_rejects_invalid_ipcount() {
   echo "- gva-menu rejects ipCount values outside 1..256"
   local out rc
   set +e
-  out="$(printf 'cluster-a\n\n\nocid1.cluster.oc1..abc\nGrCh:US-ASHBURN-AD-1\nocid1.subnet.oc1..primary\npool1\nVM.Standard.E5.Flex\n2\n16\n3\nocid1.image.oc1..img\n1\nfrontend\nocid1.subnet.oc1..secondary\n257\n256\n\nfrontend-vnic\n2\n\n2\n' | "$REPO_ROOT/scripts/gva-menu.sh" 2>"$TMPDIR_BASE/t6.err")"
+  out="$(printf 'cluster-a\nus-ashburn-1\n\nocid1.cluster.oc1..abc\nGrCh:US-ASHBURN-AD-1\nocid1.vcn.oc1..vcn\nocid1.subnet.oc1..primary\npool1\nVM.Standard.E5.Flex\n2\n16\n3\nocid1.image.oc1..img\n1\nfrontend\nocid1.subnet.oc1..secondary\n257\n256\n\nfrontend-vnic\n2\n\ny\n2\n' | "$REPO_ROOT/scripts/gva-menu.sh" 2>"$TMPDIR_BASE/t6.err")"
   rc=$?
   set -e
   assert_eq "0" "$rc" "gva-menu still completes after retrying ipCount"

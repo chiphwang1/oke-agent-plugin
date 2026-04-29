@@ -23,20 +23,22 @@ It does not include Terraform module mappings because the source document is CLI
 - **Discovery helper**: `scripts/gva-discover.sh`
 
 ### Discovery Flow
-1. User enters **cluster name** (no default cluster).
+1. User enters an explicit **cluster name**. No default cluster is allowed.
 2. Cluster OCID is resolved from `~/.kube/config` when possible.
-3. Region defaults are pulled from `~/.oci/config`.
+3. User enters the region explicitly, and the workflow uses that exact reply.
 4. `oci ce cluster get --cluster-id <ocid>` retrieves compartment and K8s version.
 5. VCN list → subnet list → image list are fetched via OCI CLI.
-6. Prompt only for missing values.
+6. Mutable node-pool values are prompted again for each new create flow.
 
 ### Menu Enhancements Added
 - VCN selection **before** subnet selection.
 - OKE image list filtered by cluster Kubernetes version.
+- No default cluster name.
+- Region is always asked explicitly and the user reply is used for OCI calls.
 - Optional parameters section (only asks for values the user wants).
 - End‑of‑flow action menu: **Run now / Print only / Exit**.
 - `ipCount` validation enforces the documented range of `1..256`.
-- Discovered secondary subnets that advertise IPv6 are rejected for GVA profile selection.
+- Discovered secondary subnet choices are filtered to IPv4-only subnets with more than one IPv4 CIDR block.
 - Preview CLI activation/wheel paths are resolved from environment or known local locations, not a single hardcoded workstation path.
 
 ## Assumptions
