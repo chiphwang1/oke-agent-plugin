@@ -108,10 +108,6 @@ Deploys OKE node pools configured with Generic VNIC Attachment (GVA), including 
 **Prerequisites:**
 - OCI CLI installed and configured
 - `kubectl` configured for the target cluster
-- GVA preview CLI workflow:
-  - `source "$(bash ./scripts/gva-cli-resolve.sh --print-activate)"`
-  - If needed, install local preview wheel:
-    - `python -m pip install --no-deps --force-reinstall "$(bash ./scripts/gva-cli-resolve.sh --print-wheel)"`
 
 **Usage:**
 
