@@ -1,6 +1,6 @@
 ---
 name: oke-multihome-deployer
-description: Deploy and troubleshoot multihome networking on Oracle Kubernetes Engine using GVA secondary VNICs, Multus thick plugin, OCI CNI/IPAM, NetworkAttachmentDefinitions, and test pods. Use when the user asks to auto-discover OKE cluster subnets or node pools for multihome, create OKE multihome pod manifests, configure Multus NADs for secondary VNIC interfaces such as enp1s0/enp2s0, validate multihomed pod connectivity, inspect OCI CNI IPAM allocation on OKE nodes, or package repeatable OKE GVA multihome deployment steps.
+description: Deploy and troubleshoot multihome networking on Oracle Kubernetes Engine using GVA secondary VNICs, Multus thick plugin, OCI CNI/IPAM, NetworkAttachmentDefinitions, and test pods. Use when the user asks to auto-discover OKE cluster subnets or node pools for multihome, create OKE multihome pod manifests, configure Multus NADs for secondary VNIC interfaces such as enp1s0/enp2s0, validate multihomed pod connectivity, inspect OCI CNI IPAM allocation on OKE nodes, troubleshoot DPDK/SR-IOV Mellanox mlx5 workloads that use Multus or device-plugin resources, or package repeatable OKE GVA multihome deployment steps.
 ---
 
 # OKE Multihome Deployer
@@ -114,5 +114,11 @@ Read `references/oke-multihome-notes.md` when:
 - `ipvlan` is missing on the host.
 - OCI IPAM capacity or allocation behavior is unclear.
 - Floating IP/VIP behavior is being explored.
+
+Read `references/oke-dpdk-mlx5-notes.md` when:
+
+- The workload uses DPDK, SR-IOV device-plugin resources, Mellanox/NVIDIA VFs, `mlx5`, `vfio-pci`, hugepages, or `/dev/infiniband`.
+- A pod requests Multus networks and device-plugin resources but `network-status` only shows `eth0`.
+- You need to decide whether the issue is Multus/NAD attachment, resource allocation, driver binding, RDMA/verbs exposure, hugepages, or app PCI/interface mapping.
 
 For node-side inspection, prefer a privileged diagnostic DaemonSet that mounts `/` at `/host` and runs commands with `chroot /host`, rather than SSHing to each worker.

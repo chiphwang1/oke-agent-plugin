@@ -89,6 +89,34 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - Inspect `/dev/shm/oci-cni/free` and `/dev/shm/oci-cni/used` when OCI IPAM allocation state is in question.
 - **Normalization tips**: Separate OCI CNI primary-pod-network failures from Multus secondary-network failures. Flag `FailedCreatePodSandBox`, missing CNI binaries, subnet/IP exhaustion, stale or missing `network-status`, and NAD namespace/name mismatches.
 
+## DPDK / SR-IOV / Mellanox mlx5
+- **When to use**
+  - User mentions DPDK, SR-IOV, Mellanox/NVIDIA, `mlx5`, `vfio-pci`, `/dev/infiniband`, `ibv_devices`, `dpdk-devbind.py`, hugepages, or a pod that requests device-plugin resources but lacks expected Multus interfaces.
+  - Also load `../oke-multihome-deployer/references/oke-dpdk-mlx5-notes.md`.
+- **Kubernetes**
+  - `kubectl -n <ns> describe pod <pod>`
+  - `kubectl -n <ns> get pod <pod> -o jsonpath='{.metadata.annotations.k8s\.v1\.cni\.cncf\.io/network-status}'`
+  - `kubectl get network-attachment-definitions -A | egrep '<ns>|noiommu|sriov|mlx|dpdk'`
+  - `kubectl -n <ns> get network-attachment-definition <nad> -o yaml`
+  - `kubectl -n <ns> get events --field-selector involvedObject.name=<pod> --sort-by=.lastTimestamp`
+- **Pod exec checks**
+  - `kubectl -n <ns> exec <pod> -- ip -br addr`
+  - `kubectl -n <ns> exec <pod> -- ls -l /dev/infiniband`
+  - `kubectl -n <ns> exec <pod> -- ibv_devices`
+  - `kubectl -n <ns> exec <pod> -- lspci -nnk`
+  - `kubectl -n <ns> exec <pod> -- dpdk-devbind.py -s`
+  - `kubectl -n <ns> exec <pod> -- grep -i Huge /proc/meminfo`
+  - `kubectl -n <ns> exec <pod> -- mount | grep -i huge`
+  - `kubectl -n <ns> logs <pod> | egrep -i 'EAL|mlx5|ibv|verbs|huge|vfio|pci|rte'`
+- **Node-side checks**
+  - Use a privileged diagnostic pod, `kubectl debug node/<node>`, or SSH only after confirmation.
+  - `ip -br addr`
+  - `lspci -nnk | egrep -A3 'Mellanox|NVIDIA|Ethernet'`
+  - `ls -l /dev/vfio`
+  - `find /sys/kernel/iommu_groups -maxdepth 1 -mindepth 1 -type d | wc -l`
+  - `dpdk-devbind.py -s`
+- **Normalization tips**: Keep resource allocation, Multus attachment, driver binding, RDMA/verbs exposure, hugepage visibility, and application PCI/interface mapping as separate facts. If `network-status` only shows `eth0`, do not claim SR-IOV/Multus attachment is working just because the pod is `Running`. For Mellanox `mlx5` PMD, do not assume `vfio-pci` is correct; `mlx5_core` plus RDMA/verbs may be the intended model.
+
 ## Cluster Autoscaler / Node Pool Scaling
 - **Helper script**
   - `bash ../../scripts/oke-autoscaler-check.sh --namespace <ns> [--deployment <deployment>] --cluster-id <cluster_ocid> --compartment-id <compartment_ocid> --region <region>`

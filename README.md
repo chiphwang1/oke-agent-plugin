@@ -24,6 +24,8 @@ Live OCI/OKE validation still requires a valid OCI CLI session and kubeconfig. T
 
 ## Skills
 
+**New DPDK/SR-IOV coverage:** the troubleshooting and multihome skills now include evidence-driven checks for OKE workloads that combine DPDK, Multus, SR-IOV device-plugin resources, Mellanox `mlx5`, `vfio-pci`, RDMA/verbs devices, and hugepages. The workflow keeps Kubernetes resource allocation, Multus `NetworkAttachmentDefinition` attachment, driver binding, and DPDK application configuration as separate diagnostic facts.
+
 **Implementation Notes:**
 - `skills/oke-cluster-generator/implementation.md`
 - `implementation.md` (Skill 2 — `/oke-troubleshooter`)
@@ -76,6 +78,7 @@ Performs end-to-end diagnosis of OKE incidents by correlating Kubernetes symptom
 **OKE-specific coverage:**
 - kube-system add-on health: CoreDNS, OCI CNI, CSI, metrics, and daemonset/deployment readiness
 - Pod networking: OCI CNI/IPAM, Multus, NADs, pod sandbox creation, and secondary-interface failures
+- DPDK/SR-IOV: Mellanox `mlx5`, `vfio-pci`, RDMA/verbs, hugepage, and Multus attachment evidence
 - Cluster autoscaler and node-pool scaling: Pending pods, FailedScheduling, scale-up refusal, node pool limits
 - DNS and service discovery: CoreDNS, Service/EndpointSlice state, and pod-local lookups
 - Ingress, private endpoint, OCIR image pulls, workload identity, and incident timeline evidence
@@ -124,7 +127,7 @@ Deploys and validates Multus-based multi-home pods on an OKE node pool that alre
 - Generates Multus `NetworkAttachmentDefinition` resources for default and secondary pod networks
 - Generates pinned netshoot test pods using fully qualified images
 - Verifies pod `network-status`, `eth0`/`net1` interfaces, and pod-to-pod connectivity over `net1`
-- Includes troubleshooting guidance for missing `ipvlan`, CRI-O short-name rejection, OCI IPAM state, and Multus pod sandbox failures
+- Includes troubleshooting guidance for missing `ipvlan`, CRI-O short-name rejection, OCI IPAM state, Multus pod sandbox failures, and DPDK/SR-IOV Mellanox `mlx5` validation
 
 **Prerequisites:**
 - `kubectl` configured for the target cluster
@@ -174,7 +177,8 @@ oke-agent-plugin/
 │       ├── agents/
 │       │   └── openai.yaml                 # Skill UI metadata
 │       ├── references/
-│       │   └── oke-multihome-notes.md      # Known working pattern and failure handling
+│       │   ├── oke-multihome-notes.md      # Known working pattern and failure handling
+│       │   └── oke-dpdk-mlx5-notes.md      # DPDK, Multus, and Mellanox mlx5 diagnostics
 │       └── scripts/
 │           ├── discover-oke-multihome.py   # Cluster/node-pool/subnet discovery
 │           └── generate-multihome-manifest.py # NAD and test pod manifest generator

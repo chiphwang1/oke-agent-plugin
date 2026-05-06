@@ -61,6 +61,19 @@ Use a privileged diagnostic DaemonSet and `chroot /host` for repeated multi-node
 - Pods do not receive the expected interfaces: check the exact NAD names, namespaces, and Multus annotations.
 - Cross-pod `net1` ping fails: confirm both pods are on nodes with the secondary VNIC interface, check subnet security rules/NSGs, and verify each pod's `network-status` annotation.
 
+## DPDK / SR-IOV Boundary
+
+For DPDK workloads, keep these mechanisms separate:
+
+- `resources.requests` or `resources.limits` for a device-plugin resource only asks Kubernetes to allocate that resource.
+- `k8s.v1.cni.cncf.io/networks` only asks Multus to attach named networks.
+- A `NetworkAttachmentDefinition` defines what each named network means.
+- `k8s.v1.cni.cncf.io/network-status` is the evidence that Multus actually attached the interfaces.
+
+If a pod requests SR-IOV or Mellanox resources but `network-status` only shows the default `eth0` network, scheduling may have succeeded while Multus attachment is still unproven or broken. First collect NAD YAML and pod `network-status` before debugging the DPDK application.
+
+For Mellanox/NVIDIA `mlx5` DPDK PMD, do not assume `vfio-pci` is the right driver. Some working mlx5 paths use the Linux `mlx5_core` driver plus RDMA/verbs devices. If the workload mentions `mlx5`, `/dev/infiniband`, `ibv_devices`, or DPDK mlx5 PMD libraries, read `oke-dpdk-mlx5-notes.md`.
+
 ## Floating IP Note
 
 A VIP can be modeled as an OCI secondary private IP moved between matching secondary VNICs:

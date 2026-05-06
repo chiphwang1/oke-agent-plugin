@@ -1,7 +1,7 @@
 {
   "name": "oke-agent-plugin",
   "version": "0.3.0",
-  "description": "Codex plugin for Oracle Kubernetes Engine: Terraform cluster generation, incident troubleshooting, GVA node pool deployment, and Multus multihome workload validation.",
+  "description": "Codex plugin for Oracle Kubernetes Engine: Terraform cluster generation, incident troubleshooting, GVA node pool deployment, Multus multihome validation, and DPDK/SR-IOV diagnostics.",
   "author": {
     "name": "chiphwang1",
     "url": "https://github.com/chiphwang1/oke-agent-plugin"
@@ -16,13 +16,15 @@
     "kubernetes",
     "terraform",
     "gva",
-    "multus"
+    "multus",
+    "dpdk",
+    "sriov"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "OKE Agent Plugin",
-    "shortDescription": "Generate, troubleshoot, and validate OKE clusters and GVA multihome workloads.",
-    "longDescription": "Reusable Codex skills for Oracle Kubernetes Engine workflows: Terraform and OCI Resource Manager generation, incident troubleshooting, Generic VNIC Attachment node-pool setup, and Multus multihome pod validation.",
+    "shortDescription": "Generate, troubleshoot, and validate OKE clusters, GVA, Multus, and DPDK/SR-IOV paths.",
+    "longDescription": "Reusable Codex skills for Oracle Kubernetes Engine workflows: Terraform and OCI Resource Manager generation, incident troubleshooting, Generic VNIC Attachment node-pool setup, Multus multihome pod validation, and DPDK/SR-IOV evidence collection.",
     "developerName": "chiphwang1",
     "category": "Developer Tools",
     "capabilities": [

@@ -1,6 +1,6 @@
 ---
 name: oke-troubleshooter
-description: Use this skill when the user wants to diagnose issues with an OCI Kubernetes Engine cluster. Trigger phrases include "pods pending", "troubleshoot OKE", "service has no IP", "cluster unhealthy", or any request to root-cause OKE symptoms.
+description: Use this skill when the user wants to diagnose issues with an OCI Kubernetes Engine cluster. Trigger phrases include "pods pending", "troubleshoot OKE", "service has no IP", "cluster unhealthy", DPDK/SR-IOV mlx5 pod failures, Multus network-status issues, or any request to root-cause OKE symptoms.
 ---
 
 You are an experienced Site Reliability Engineer for OCI Kubernetes Engine. Guide the user through an evidence-driven investigation that spans Kubernetes signals and OCI infrastructure.
@@ -9,6 +9,7 @@ Supporting references (load on demand):
 - `symptom-triage.md` — initial mapping of symptom → diagnostic domains.
 - `evidence-collectors.md` — command recipes for each domain.
 - `../../shared/oci-resource-map.md` — K8s-to-OCI mapping commands.
+- `../oke-multihome-deployer/references/oke-dpdk-mlx5-notes.md` — DPDK, Multus, Mellanox mlx5, `vfio-pci`, hugepage, and RDMA/verbs diagnostic rules.
 
 Optional accelerators (use only when the runtime supports delegation; never block on them):
 - `../../agents/oke-evidence-collector.md` — agent for command execution and evidence normalization.
