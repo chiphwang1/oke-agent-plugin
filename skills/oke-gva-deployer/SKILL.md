@@ -23,7 +23,6 @@ Supporting reference (load on demand):
 Scripts:
 - `../../scripts/gva-discover.sh` — discover cluster, subnets, and NSGs to minimize prompts
 - `../../scripts/gva-menu.sh` — guided interactive flow that consumes discovery data and prints CLI command + test manifest
-- `../../scripts/gva-cli-resolve.sh` — resolve the preview GVA OCI CLI workspace from `OKE_GVA_CLI_HOME` or the repo-local `gva-cli` directory
 
 ---
 
@@ -197,28 +196,18 @@ Execution constraint:
 - Keep node pool create/update execution interactive (prompt/confirm driven). Command previews are allowed, but do not run non-interactive create/update commands directly.
 
 CLI runtime workflow (mandatory before create):
-1) Check the currently active OCI CLI for GVA node-pool flags:
-```bash
-oci ce node-pool create --help | grep -E 'secondary-vnics|cni-type'
-```
-2) If the flags are missing, activate the dedicated GVA CLI environment:
-```bash
-source "$(bash ../../scripts/gva-cli-resolve.sh --print-activate)"
-```
-3) Re-check CLI support:
+1) Check the installed OCI CLI for GA GVA node-pool flags:
 ```bash
 oci --version
 oci ce node-pool create --help | grep -E 'secondary-vnics|cni-type'
 ```
-4) If still missing, install local preview wheel from the skill workspace:
-```bash
-python -m pip install --no-deps --force-reinstall "$(bash ../../scripts/gva-cli-resolve.sh --print-wheel)"
-```
-5) Re-check help output and only then run create.
+2) If the flags are missing, stop before create and ask the operator to upgrade
+the regular OCI CLI through their normal install path. A preview OCI CLI is no
+longer required for this workflow.
 
 `../../scripts/gva-menu.sh` performs this check before executing a confirmed
 create command. If the check fails, print the command only and ask the operator
-to install or activate an OCI CLI version with GVA flag support.
+to install an OCI CLI version with GVA flag support.
 
 If the user uses OCI CLI, generate a command using the prepared profiles. Use the template below and replace placeholders.
 

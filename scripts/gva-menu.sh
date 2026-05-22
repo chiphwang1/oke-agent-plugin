@@ -103,39 +103,10 @@ verify_gva_cli_before_create() {
       "Install OCI CLI or choose Print command only."
   fi
 
-  if oci_node_pool_create_supports_gva; then
-    return 0
-  fi
-
-  local activate_path wheel_path
-  activate_path="$(bash "$SCRIPT_DIR/gva-cli-resolve.sh" --print-activate)" || {
-    emit_error 1 "GVA_CLI_FLAGS_UNAVAILABLE" \
-      "The active OCI CLI does not expose GVA node-pool flags and no preview CLI activation script could be resolved." \
-      "Set OKE_GVA_CLI_HOME, place gva-cli under the plugin repo root, or choose Print command only."
-  }
-
-  # shellcheck source=/dev/null
-  source "$activate_path"
-  if oci_node_pool_create_supports_gva; then
-    return 0
-  fi
-
-  wheel_path="$(bash "$SCRIPT_DIR/gva-cli-resolve.sh" --print-wheel)" || {
-    emit_error 1 "GVA_CLI_WHEEL_NOT_FOUND" \
-      "The preview GVA CLI environment is active but the local preview wheel was not found." \
-      "Install an OCI CLI version with --secondary-vnics/--cni-type support, or choose Print command only."
-  }
-
-  python -m pip install --no-deps --force-reinstall "$wheel_path" >/dev/null || {
-    emit_error 1 "GVA_CLI_INSTALL_FAILED" \
-      "Failed to install the local preview GVA OCI CLI wheel." \
-      "Inspect the Python environment, install a supported OCI CLI manually, or choose Print command only."
-  }
-
   if ! oci_node_pool_create_supports_gva; then
     emit_error 1 "GVA_CLI_FLAGS_UNAVAILABLE" \
-      "OCI CLI still does not expose --secondary-vnics or --cni-type after preview CLI activation." \
-      "Install a supported OCI CLI version or choose Print command only."
+      "OCI CLI does not expose --secondary-vnics or --cni-type for node-pool create." \
+      "Upgrade OCI CLI to a version with GA GVA support, or choose Print command only."
   fi
 }
 

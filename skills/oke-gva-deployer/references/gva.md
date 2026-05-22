@@ -38,7 +38,7 @@ Source: `gva-documentation_1_14.docx` (Document Version 1.0, Last Updated Decemb
   `oci.oraclecloud.com/application-resource-only:NoSchedule`
 
 ## CLI Version Note
-- The doc specifies a preview OCI CLI version: `oci-cli==3.65.2+preview.1.1355`.
+- GVA node-pool create is expected to use the regular OCI CLI. Confirm local support with `oci ce node-pool create --help | grep -E 'secondary-vnics|cni-type'`.
   Confirm availability in the user's environment before relying on it.
 
 ## Example Secondary VNIC JSON (template)

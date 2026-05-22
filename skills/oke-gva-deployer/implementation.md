@@ -39,7 +39,7 @@ It does not include Terraform module mappings because the source document is CLI
 - End‑of‑flow action menu: **Run now / Print only / Exit**.
 - `ipCount` validation enforces the documented range of `1..256`.
 - Discovered secondary subnet choices are filtered to IPv4-only subnets with more than one IPv4 CIDR block.
-- Preview CLI activation/wheel paths are resolved from `OKE_GVA_CLI_HOME` or a repo-local `gva-cli` directory, not a hardcoded workstation path.
+- GVA node-pool create uses the regular OCI CLI. The workflow checks for `--secondary-vnics` and `--cni-type` before execution and no longer requires a preview OCI CLI.
 
 ## Assumptions
 - GVA is supported only with VCN‑Native CNI (`OCI_VCN_IP_NATIVE`).
@@ -49,7 +49,7 @@ It does not include Terraform module mappings because the source document is CLI
 
 ## Known Gaps
 - Terraform mapping and module-specific variables are not included.
-- CLI version constraints (preview version) are documented but not enforced.
+- Minimum OCI CLI version for GA GVA flags is checked by help output, not by a pinned version string.
 - Shape/image compatibility and VNIC attachment limits by shape are not programmatically validated; keep these as TODO/live validation checks unless OCI metadata proves them.
 
 ## Follow-up Enhancements

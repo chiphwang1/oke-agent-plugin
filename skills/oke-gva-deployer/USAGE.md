@@ -46,14 +46,15 @@ Constraint:
 - Never assume a cluster name.
 - Always ask for the region and use the user-provided region for the current workflow.
 
-## Preview CLI Resolution
-If you need the preview OCI CLI build for GVA flags, resolve it from the current machine instead of hardcoding a workstation path:
+## OCI CLI Support
+GVA node-pool flags are expected in the regular OCI CLI. A preview OCI CLI is no longer required for this workflow.
 
 ```bash
-bash ./scripts/gva-cli-resolve.sh --json
-source "$(bash ./scripts/gva-cli-resolve.sh --print-activate)"
-python -m pip install --no-deps --force-reinstall "$(bash ./scripts/gva-cli-resolve.sh --print-wheel)"
+oci --version
+oci ce node-pool create --help | grep -E 'secondary-vnics|cni-type'
 ```
+
+If the flags are missing, upgrade OCI CLI through your normal install path before running create. You can still print the generated command for review.
 
 ## Inputs You Still Need to Provide
 Even with discovery, you must choose:
