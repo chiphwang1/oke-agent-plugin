@@ -1,6 +1,6 @@
 # OKE Agent Plugin
 
-Give your coding agent practical Oracle Kubernetes Engine (OKE) operating knowledge.
+Give your coding agent practical OCI Kubernetes Engine (OKE) operating knowledge.
 
 This repo packages reusable agent skills for Claude Code and Codex. The skills help
 you generate OKE Terraform, troubleshoot cluster incidents, configure Generic VNIC
@@ -15,7 +15,7 @@ ask the agent to use one of these skills.
 ## Why Try It
 
 OKE work often crosses several layers at once: Kubernetes objects, OKE add-ons, OCI
-networking, IAM, node pools, load balancers, storage, and quota. General-purpose
+networking, IAM, node pools, load balancers, and storage. General-purpose
 agents can miss those connections unless you give them a lot of context.
 
 This plugin gives the agent that context up front:
