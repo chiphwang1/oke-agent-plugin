@@ -197,20 +197,28 @@ Execution constraint:
 - Keep node pool create/update execution interactive (prompt/confirm driven). Command previews are allowed, but do not run non-interactive create/update commands directly.
 
 CLI runtime workflow (mandatory before create):
-1) Activate the dedicated GVA CLI environment:
+1) Check the currently active OCI CLI for GVA node-pool flags:
+```bash
+oci ce node-pool create --help | grep -E 'secondary-vnics|cni-type'
+```
+2) If the flags are missing, activate the dedicated GVA CLI environment:
 ```bash
 source "$(bash ../../scripts/gva-cli-resolve.sh --print-activate)"
 ```
-2) Confirm CLI version supports GVA flags:
+3) Re-check CLI support:
 ```bash
 oci --version
-oci ce node-pool create --help | rg 'secondary-vnics|cni-type'
+oci ce node-pool create --help | grep -E 'secondary-vnics|cni-type'
 ```
-3) If missing, install local preview wheel from the skill workspace:
+4) If still missing, install local preview wheel from the skill workspace:
 ```bash
 python -m pip install --no-deps --force-reinstall "$(bash ../../scripts/gva-cli-resolve.sh --print-wheel)"
 ```
-4) Re-check help output and only then run create.
+5) Re-check help output and only then run create.
+
+`../../scripts/gva-menu.sh` performs this check before executing a confirmed
+create command. If the check fails, print the command only and ask the operator
+to install or activate an OCI CLI version with GVA flag support.
 
 If the user uses OCI CLI, generate a command using the prepared profiles. Use the template below and replace placeholders.
 
