@@ -30,7 +30,8 @@ The troubleshooter focuses on:
 ## Discovery Flow (New)
 1. User provides **cluster name** (or OCID).
 2. `scripts/oke-discover.sh` resolves cluster OCID from `~/.kube/config`.
-3. Region defaults are pulled from `~/.oci/config`.
+3. Region is derived from the active kube context or explicit user input; `~/.oci/config`
+   is used only for auth/profile hints.
 4. `oci ce cluster get --cluster-id <ocid>` retrieves compartment and K8s version.
 5. The skill auto-populates `cluster_ocid`, `compartment_ocid`, and `region`.
 6. Prompt only for missing context (namespace, time window, resource names).
@@ -43,9 +44,10 @@ The troubleshooter focuses on:
 ## Assumptions
 - `kubectl` is configured to access the target cluster.
 - OCI CLI is installed when OCI-layer evidence is needed.
+- Expired OCI security-token auth is a preflight blocker, not a cluster-health signal.
+  Renew auth before collecting evidence that depends on kubeconfig exec or OCI APIs.
 
 ## Known Gaps
-- No automated parsing of kubeconfig context names into region; relies on OCI discovery.
 - No built-in caching; repeated runs re-discover context.
 - Ingress, OCIR, private endpoint, and workload identity helpers collect evidence but do not yet perform full object graph correlation or IAM policy simulation.
 

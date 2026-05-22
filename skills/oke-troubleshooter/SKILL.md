@@ -74,6 +74,11 @@ Helper scripts:
 4. **Tool Availability Checks**
    - Run `kubectl version --client` and `oci --version`.
    - Record `KUBECTL_AVAILABLE`/`OCI_AVAILABLE` booleans. If a CLI is missing, inform the user that evidence will be partial and continue with available tools.
+   - If `kubectl` fails with `getting credentials: exec: executable oci failed`, or
+     OCI CLI output says the session has expired or cannot currently be used, pause
+     evidence collection and ask the user to renew the OCI session. If the workspace
+     provides a known login helper such as `oci-login.sh`, offer to run it before
+     continuing. Do not treat expired credentials as evidence that the cluster is down.
 5. **Session State**
    - Initialize state structure:
      ```json
@@ -228,7 +233,7 @@ Helper scripts:
    - For Node Health investigations, include optional Node Doctor diagnostics:
      - Trigger when Node Health is selected and there are node readiness/kubelet/runtime signals, or when user explicitly asks.
      - Scope starts with one candidate node first, then ask whether to continue to additional nodes.
-    - Default debug image to `docker.io/library/ubuntu` each run (`kubectl debug ... --image=<image-name>`), and allow user override. Keep the selected image in session for additional nodes unless user changes it.
+     - Default debug image to `docker.io/library/ubuntu` each run (`kubectl debug ... --image=<image-name>`), and allow user override. Keep the selected image in session for additional nodes unless user changes it.
      - Before execution, present the exact sequence and ask explicit confirmation per node:
        1) `bash ../../scripts/node-doctor-run.sh --node <node-name> --image <image-name>`
        2) (script executes `kubectl debug` + `chroot /host` + `sudo /usr/local/bin/node-doctor.sh --check`)

@@ -45,6 +45,7 @@ Constraint:
 - Build the new node pool from cluster metadata, VCN/subnet discovery, image options, and explicit user inputs.
 - Never assume a cluster name.
 - Always ask for the region and use the user-provided region for the current workflow.
+- If OCI CLI security-token auth is expired, renew it before discovery or create. If your workspace provides `oci-login.sh`, run that helper and then restart the same selected-cluster workflow.
 
 ## OCI CLI Support
 GVA node-pool flags are expected in the regular OCI CLI. A preview OCI CLI is no longer required for this workflow.

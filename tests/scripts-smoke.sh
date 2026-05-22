@@ -78,6 +78,10 @@ done
 cmd="${trimmed[*]}"
 
 if [[ "$cmd" == iam\ region-subscription\ list* ]]; then
+  if [[ "${MOCK_OCI_SESSION_EXPIRED:-0}" == "1" ]]; then
+    echo "ERROR: This CLI session has expired, so it cannot currently be used to run commands" >&2
+    exit 1
+  fi
   if [[ "${MOCK_OCI_AUTH_FAIL:-0}" == "1" ]]; then
     echo "Not authenticated" >&2
     exit 1
@@ -488,6 +492,19 @@ run_test_preflight() {
   assert_json_expr "$out" "obj['compartments'][0]['name'] == 'root (tenancy)'" "preflight prepends root compartment"
 }
 
+run_test_preflight_expired_session() {
+  echo "- preflight-check reports expired OCI session"
+  local err rc
+  set +e
+  MOCK_OCI_SESSION_EXPIRED=1 "$REPO_ROOT/scripts/preflight-check.sh" >/dev/null 2>"$TMPDIR_BASE/t1-expired.err"
+  rc=$?
+  set -e
+  assert_eq "1" "$rc" "preflight-check exits 1 for expired session"
+  err="$(cat "$TMPDIR_BASE/t1-expired.err")"
+  assert_json_expr "$err" "obj['error_code'] == 'OCI_CLI_SESSION_EXPIRED'" "preflight emits expired-session error code"
+  assert_json_expr "$err" "'oci-login.sh' in obj['remediation']" "preflight suggests workspace login helper"
+}
+
 run_test_gva_discover_cluster_get_failure() {
   echo "- gva-discover handles cluster get failure without crashing"
   local out rc
@@ -823,6 +840,7 @@ main() {
   export HOME="$TMPDIR_BASE/home"
 
   run_test_preflight
+  run_test_preflight_expired_session
   run_test_gva_discover_cluster_get_failure
   run_test_oke_discover_cluster_get_failure
   run_test_node_doctor_namespace

@@ -18,7 +18,7 @@ Supporting references:
 
 1. Confirm target cluster/context and auth.
    - Prefer explicit `OCI_CLI_PROFILE` and `OCI_CLI_AUTH`; when using OCI security-token auth, pass `--auth security_token` or set `OCI_CLI_AUTH=security_token`.
-   - If `kubectl` fails with `exec: executable oci failed`, ask the user to refresh the OCI session before applying anything.
+   - If `kubectl` fails with `exec: executable oci failed`, or OCI CLI says the session has expired, ask the user to refresh the OCI session before discovery or applying anything. If a workspace login helper such as `oci-login.sh` exists and the user approves running it, run it and retry against the same context.
 2. Auto-discover cluster, node pool, and subnet data before generating YAML.
    - Use `scripts/discover-oke-multihome.py`.
    - Prefer `--cluster-id` when the user provides it; otherwise try `--context`, then `--cluster-name` with `--compartment-id`.

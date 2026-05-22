@@ -14,7 +14,7 @@ oci --version
 
 For OCI-layer evidence, the OCI CLI profile must be authenticated and authorized to read OKE, Compute, Network, Load Balancer, Block Volume, IAM, Logging, Monitoring, and Limits data in the target compartment.
 
-If your kubeconfig uses OCI security-token auth and `kubectl` fails with an OCI exec error, renew the OCI session first. This repo does not assume a default cluster or default region during troubleshooting.
+If your kubeconfig uses OCI security-token auth and `kubectl` fails with an OCI exec error, renew the OCI session first. Typical symptoms include `This CLI session has expired` and `getting credentials: exec: executable oci failed`. Use `oci session authenticate`, `oci session refresh` when still valid, or the workspace login helper your team provides, such as `oci-login.sh`. This repo does not assume a default cluster or default region during troubleshooting.
 
 ## Basic Skill Usage
 

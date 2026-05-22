@@ -38,6 +38,12 @@ Flow requirements:
 4) Use OCI CLI to retrieve cluster details, then **auto-populate** whatever is available.
 5) Prompt only for missing information.
 
+If OCI CLI reports an expired security-token session, or if kubeconfig lookup fails with
+`getting credentials: exec: executable oci failed`, stop discovery and ask the user to
+renew authentication before continuing. If a workspace login helper such as
+`oci-login.sh` is present and the user approves running it, use that helper, then rerun
+discovery against the same explicitly selected cluster and region.
+
 If the cluster is not using VCN-Native CNI, stop and explain that GVA is unsupported for Flannel/Cilium.
 
 ---

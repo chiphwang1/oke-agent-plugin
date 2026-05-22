@@ -55,7 +55,7 @@ Use a privileged diagnostic DaemonSet and `chroot /host` for repeated multi-node
 
 ## Common Failures
 
-- `getting credentials: exec: executable oci failed`: refresh OCI CLI security token or set `OCI_CLI_PROFILE` and `OCI_CLI_AUTH` correctly.
+- `getting credentials: exec: executable oci failed` or `This CLI session has expired`: refresh OCI CLI security-token auth, then rerun discovery. If a workspace helper such as `oci-login.sh` is used and reports port `8181` is already in use, free that callback listener or ask the operator before terminating the process that owns it.
 - CRI-O rejects `nicolaka/netshoot:v0.13`: use `docker.io/nicolaka/netshoot:v0.13`.
 - Pod sandbox creation fails with missing CNI plugin `ipvlan`: install the standard `ipvlan` CNI binary on the worker host.
 - Pods do not receive the expected interfaces: check the exact NAD names, namespaces, and Multus annotations.

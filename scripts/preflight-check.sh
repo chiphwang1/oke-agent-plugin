@@ -29,8 +29,9 @@ TMP_SUBSCRIPTIONS_JSON="$(mktemp)"
 TMP_COMPARTMENTS_JSON="$(mktemp)"
 TMP_REGIONS_JSON="$(mktemp)"
 TMP_COMPARTMENTS_OUT_JSON="$(mktemp)"
+TMP_AUTH_ERR="$(mktemp)"
 cleanup_tmp() {
-  rm -f "$TMP_SUBSCRIPTIONS_JSON" "$TMP_COMPARTMENTS_JSON" "$TMP_REGIONS_JSON" "$TMP_COMPARTMENTS_OUT_JSON"
+  rm -f "$TMP_SUBSCRIPTIONS_JSON" "$TMP_COMPARTMENTS_JSON" "$TMP_REGIONS_JSON" "$TMP_COMPARTMENTS_OUT_JSON" "$TMP_AUTH_ERR"
 }
 trap cleanup_tmp EXIT
 
@@ -46,11 +47,18 @@ fi
 
 # ── step 2: verify OCI CLI is authenticated ───────────────────────────────────
 
-if ! oci iam region-subscription list --output json >/dev/null 2>&1; then
+if ! oci iam region-subscription list --output json >/dev/null 2>"$TMP_AUTH_ERR"; then
+  if grep -qiE 'session has expired|cannot currently be used|not valid and cannot be refreshed' "$TMP_AUTH_ERR"; then
+    emit_error 1 \
+      "OCI_CLI_SESSION_EXPIRED" \
+      "The OCI CLI security-token session is expired." \
+      "Renew the OCI CLI session, then rerun preflight. If this repo has an oci-login.sh helper, run it from the workspace root." \
+      "https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/clitoken.htm"
+  fi
   emit_error 1 \
     "OCI_CLI_NOT_AUTHENTICATED" \
     "The OCI CLI is installed but not authenticated. Check ~/.oci/config." \
-    "Run: oci setup config" \
+    "Run: oci setup config, oci session authenticate, or your workspace login helper." \
     "https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliconfigure.htm"
 fi
 

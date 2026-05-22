@@ -137,9 +137,9 @@ known pattern in these references.
 
 Use the `Bash` tool throughout the questionnaire to query the user's tenancy and populate
 choice prompts with real data (K8s versions, compartments, VCNs, shapes, vault
-keys, add-ons). Requires: OCI CLI installed, `~/.oci/config` configured, read access to
-IAM, CE, Compute, Network, KMS, and Limits. For failures, apply the CLI Fallback Pattern
-(see Behavioral Guidelines).
+keys, add-ons). Requires: OCI CLI installed, `~/.oci/config` configured or an active
+security-token session, and read access to IAM, CE, Compute, Network, KMS, and Limits.
+For failures, apply the CLI Fallback Pattern (see Behavioral Guidelines).
 
 ## Web Research Constraints
 
@@ -241,8 +241,14 @@ If the script exits **2** (CLI not installed), tell the user:
 > Use `AskUserQuestion` — options: "Continue without CLI (enter OCIDs manually)", "Abort".
 
 If the script exits **1** (CLI not authenticated), tell the user:
-> "The OCI CLI is installed but not authenticated. Please run `oci setup config`."
+> "The OCI CLI is installed but not authenticated, or its security-token session expired.
+> Please run `oci setup config`, `oci session authenticate`, or the workspace login helper
+> your team uses (for example `oci-login.sh` when present)."
 > Use `AskUserQuestion` — options: "Continue without CLI (enter OCIDs manually)", "Abort".
+
+If stderr contains `OCI_CLI_SESSION_EXPIRED`, do not silently fall back to stale static
+choices. Ask whether the user wants to renew authentication first; only continue without
+CLI if the user explicitly chooses manual entry.
 
 If the script exits **0**, display:
 > "Tenancy: `<TENANCY_OCID>` | Home region: `<HOME_REGION>`"
