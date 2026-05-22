@@ -321,7 +321,7 @@ Use these scenarios when testing against a real cluster:
 
 - Broken image: run the troubleshooter against an `ImagePullBackOff`.
 - Load balancer pending: diagnose a `LoadBalancer` service with no external IP.
-- PVC pending: validate storage and CSI evidence when block volume quota is exhausted.
+- PVC pending: validate storage, CSI, volume attachment, and service-limit evidence.
 - DNS outage: scale down or break CoreDNS, then check DNS timeout diagnosis.
 - Autoscaler no-scale: create a Pending workload and inspect scale-up refusal signals.
 - Multus validation: run the multihome skill on a GVA-enabled node pool and confirm

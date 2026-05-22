@@ -1,7 +1,7 @@
 # Skill 1 Implementation Notes — `/oke-cluster-generator`
 
 ## Overview
-`/oke-cluster-generator` walks operators through a structured, five-phase workflow to produce production-ready Terraform artifacts and an OCI Resource Manager (`schema.yaml`) bundle for OCI Kubernetes Engine (OKE). The skill mirrors the legacy **OKE Terraform Stack Builder** flow but is adapted to the plugin architecture with live tenancy discovery, argument pre-fill, and error-contract alignment.
+`/oke-agent-plugin:oke-cluster-generator` walks operators through a structured, five-phase workflow to produce production-ready Terraform artifacts and an OCI Resource Manager (`schema.yaml`) bundle for OCI Kubernetes Engine (OKE). The skill mirrors the legacy **OKE Terraform Stack Builder** flow but is adapted to the plugin architecture with live tenancy discovery, argument pre-fill, and error-contract alignment.
 
 The skill definition lives in `skills/oke-cluster-generator/SKILL.md`, with supporting materials under the same directory. Shared scripts in `scripts/` (at repo root) provide tenancy discovery and CIDR validation.
 
@@ -30,7 +30,7 @@ The skill definition lives in `skills/oke-cluster-generator/SKILL.md`, with supp
 2. **Domain Interviews (D1–D7)**
    - Follow the sequence defined in the skill: Cluster Fundamentals, Networking, Node Pools, Storage, Security & Access, Add-ons & Observability, ORM Schema Preferences.
    - For each domain, prefer live tenancy data via OCI CLI before falling back to `reference.md` lists. Record fallback flags when static options are used.
-   - Use `AskUserQuestion` with structured options (including descriptions) and enforce branching logic (e.g., prompt for VCN CIDRs only when creating a new VCN).
+   - Use structured choice prompts with descriptions and enforce branching logic (e.g., prompt for VCN CIDRs only when creating a new VCN). Use numbered menus when the runtime does not provide `AskUserQuestion`.
 
 3. **Architecture Summary (Phase 2)**
    - Render a table of user selections per domain.
@@ -64,6 +64,7 @@ All phases follow the shared exit-code contract (`0` success, `1` expected issue
 ### Invocation Examples
 ```bash
 /oke-agent-plugin:oke-cluster-generator
+/oke-agent-plugin:oke-cluster-generator fast-path us-ashburn-1 demo-private-oke
 /oke-agent-plugin:oke-cluster-generator ai/ml us-ashburn-1 prod-cluster
 /oke-agent-plugin:oke-cluster-generator hpc us-frankfurt-1
 ```

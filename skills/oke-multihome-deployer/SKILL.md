@@ -1,6 +1,6 @@
 ---
 name: oke-multihome-deployer
-description: Deploy and troubleshoot multihome networking on Oracle Kubernetes Engine using GVA secondary VNICs, Multus thick plugin, OCI CNI/IPAM, NetworkAttachmentDefinitions, and test pods. Use when the user asks to auto-discover OKE cluster subnets or node pools for multihome, create OKE multihome pod manifests, configure Multus NADs for secondary VNIC interfaces such as enp1s0/enp2s0, validate multihomed pod connectivity, inspect OCI CNI IPAM allocation on OKE nodes, troubleshoot DPDK/SR-IOV Mellanox mlx5 workloads that use Multus or device-plugin resources, or package repeatable OKE GVA multihome deployment steps.
+description: Deploy and troubleshoot multihome networking on OCI Kubernetes Engine using GVA secondary VNICs, Multus thick plugin, OCI CNI/IPAM, NetworkAttachmentDefinitions, and test pods. Use when the user asks to auto-discover OKE cluster subnets or node pools for multihome, create OKE multihome pod manifests, configure Multus NADs for secondary VNIC interfaces, validate multihomed pod connectivity, inspect OCI CNI IPAM allocation on OKE nodes, or package repeatable OKE GVA multihome deployment steps. For broad incident RCA, DPDK/SR-IOV failures, or non-Multus pod symptoms, use `oke-troubleshooter` first.
 ---
 
 # OKE Multihome Deployer
@@ -26,12 +26,13 @@ Supporting references:
    - Use the discovered node names for `--pod NAME=NODE_NAME` entries.
 3. Verify prerequisites from Kubernetes and node-side checks.
    - OKE CNI must be `OCI_VCN_IP_NATIVE`.
-   - Worker nodes must expose secondary VNIC interfaces, commonly `enp1s0` and `enp2s0`.
+   - Worker nodes must expose secondary VNIC interfaces. Treat `enp1s0` and `enp2s0` as common defaults, then confirm the actual interface names from discovery or node-side evidence before applying manifests.
    - OCI CNI binaries should exist on nodes: `oci-ipam`, `oci-ipvlan`, `oci-ptp`.
    - The standard `ipvlan` CNI binary is needed when using a plain `ipvlan` secondary NAD.
 4. Install Multus thick plugin if absent.
    - Upstream manifest used in this workflow:
      `https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml`
+   - TODO(live validation): pin this manifest to a tested Multus release tag after validating it against the target OKE Kubernetes version. Keep using the repo's current manifest reference until that live validation is complete.
 5. Generate or edit the deployment manifest.
    - Use `scripts/generate-multihome-manifest.py` for repeatable YAML.
    - Default network NAD: `kube-system/gva-default-network`, using `oci-ipvlan` on the first secondary VNIC path.
@@ -81,8 +82,8 @@ Generate a two-pod test manifest:
 ```bash
 python3 <skill>/scripts/generate-multihome-manifest.py \
   --namespace gva-multihome-test \
-  --default-interface enp1s0 \
-  --secondary-interface enp2s0 \
+  --default-interface <confirmed-first-secondary-vnic-interface> \
+  --secondary-interface <confirmed-second-secondary-vnic-interface> \
   --pod gva-multihome-a=<node-name-a> \
   --pod gva-multihome-b=<node-name-b> \
   > gva-multihome-pods.yaml

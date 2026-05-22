@@ -99,7 +99,7 @@ oke-agent-plugin/
 
 ## Skill Designs
 
-### Skill 1 — Terraform Cluster Generator (`/oke-cluster-generator`)
+### Skill 1 — Terraform Cluster Generator (`/oke-agent-plugin:oke-cluster-generator`)
 
 **Basis:** [oke-terraform-stack-builder](https://github.com/chiphwang1/oke-terraform-stack-builder) — the existing skill provides the full discovery→generate→iterate workflow and is adopted as-is, integrated into the plugin structure with minor path adjustments.
 
@@ -113,7 +113,7 @@ oke-agent-plugin/
 3. Region Selection: present subscribed regions; user picks `TARGET_REGION`
 4. Compartment Selection: list active compartments; user selects `COMPARTMENT_OCID`
 
-**Phase 1 — Discovery (7 Domains, batched with `AskUserQuestion`):**
+**Phase 1 — Discovery (7 Domains, batched choice prompts):**
 - **D1 Cluster Fundamentals:** workload type, K8s version (live from `oci ce cluster-options get`), API endpoint visibility, cluster type (Enhanced/Basic)
 - **D2 Networking:** VCN source (new/existing), CNI (VCN-Native/Flannel), access infra (Bastion/Operator), gateways, extra NICs (RDMA/RoCE for AI-ML/HPC)
 - **D3 Node Pools:** pool count + per-pool loop (name, shape family, scaling strategy, shape/sizing, boot volume, OS image, cloud-init)
@@ -142,11 +142,11 @@ oke-agent-plugin/
 
 **Session state variables:** `WORKLOAD_TYPE`, `KUBERNETES_VERSION`, `CLUSTER_TYPE`, `TARGET_REGION`, `TENANCY_OCID`, `COMPARTMENT_OCID`, `HOME_REGION`, `VCN_SOURCE`, `EXISTING_VCN_OCID`, `CNI_TYPE`, `RDMA_ROCE_SELECTED`, `POOL_SHAPE_i`, `KMS_KEY_ID`, `WORKLOAD_IDENTITY_ENABLED`, plus CLI fallback flags.
 
-**Behavioral rules (from reference):** explain "why" before each decision; flag cost/quota implications; default to production-grade (HA, private nodes, encryption); never generate incomplete Terraform; batch up to 4 independent questions per `AskUserQuestion` call; run CLI calls before presenting options.
+**Behavioral rules (from reference):** explain "why" before each decision; flag cost and service-limit implications; default to production-grade (HA, private nodes, encryption); never generate incomplete Terraform; batch up to 4 independent fixed-choice questions when the runtime supports it; run CLI calls before presenting options.
 
 **CLI fallback:** if any CLI call fails, display *"Could not retrieve live [data type]. Using static list."*, set a session flag, and continue. Phase 2 notes all fallbacks used.
 
-**Argument pre-fill:** if invoked with args (e.g., `/oke-cluster-generator ai/ml us-ashburn-1 prod-cluster`), parse workload type, region, and cluster name; skip corresponding Pre-flight/Phase 1 questions.
+**Argument pre-fill:** if invoked with args (e.g., `/oke-agent-plugin:oke-cluster-generator ai/ml us-ashburn-1 prod-cluster`), parse fast-path mode, workload type, region, and cluster name; skip corresponding Pre-flight/Phase 1 questions.
 
 **Fast path:** if invoked with "fast path", "quick start", or "starter stack", collect only required tenancy/compartment/region/name inputs and apply production-friendly defaults: Enhanced private cluster, VCN-native pod networking, new VCN, NAT + service gateway, one Flex node pool, Block Volume CSI, Workload Identity, and managed CoreDNS/kube-proxy.
 
@@ -156,7 +156,7 @@ oke-agent-plugin/
 
 ---
 
-### Skill 2 — End-to-End Troubleshooter (`/oke-troubleshooter`)
+### Skill 2 — End-to-End Troubleshooter (`/oke-agent-plugin:oke-troubleshooter`)
 
 **Flow:** Symptom triage → Parallel evidence collection (k8s + OCI layers) → Hypothesis ranking → Structured report
 
@@ -186,7 +186,7 @@ oke-agent-plugin/
 
 ---
 
-### Skill 3 — GVA Node Pool Deployer (`/oke-gva-deployer`)
+### Skill 3 — GVA Node Pool Deployer (`/oke-agent-plugin:oke-gva-deployer`)
 
 **Flow:** Intake → discovery → profile design → command generation → verification guidance.
 
@@ -201,7 +201,7 @@ oke-agent-plugin/
 
 ---
 
-### Skill 4 — Multus Multi-Home Workload Deployer (`/oke-multihome-deployer`)
+### Skill 4 — Multus Multi-Home Workload Deployer (`/oke-agent-plugin:oke-multihome-deployer`)
 
 **Flow:** Confirm existing GVA node pool → discover cluster/node-pool/subnet data → verify Multus and CNI prerequisites → generate NAD and test pod manifests → validate pod interfaces and connectivity.
 
@@ -259,10 +259,10 @@ Multus manifest.
 | Phase | Deliverable | Duration |
 |---|---|---|
 | 0: Scaffolding | Plugin loads, hooks fire, dep check runs at session start | Day 1 |
-| 1: Skill 1 | `/oke-cluster-generator` produces validated Terraform bundle | Week 1 |
-| 2: Skill 2 | `/oke-troubleshooter` produces ranked hypothesis report | Week 2 |
-| 3: Skill 3 | `/oke-gva-deployer` produces validated node-pool create command and test manifest | Week 3 |
-| 4: Skill 4 | `/oke-multihome-deployer` produces Multus NADs, test pods, and connectivity checks | Week 4 |
+| 1: Skill 1 | `/oke-agent-plugin:oke-cluster-generator` produces validated Terraform bundle | Week 1 |
+| 2: Skill 2 | `/oke-agent-plugin:oke-troubleshooter` produces ranked hypothesis report | Week 2 |
+| 3: Skill 3 | `/oke-agent-plugin:oke-gva-deployer` produces validated node-pool create command and test manifest | Week 3 |
+| 4: Skill 4 | `/oke-agent-plugin:oke-multihome-deployer` produces Multus NADs, test pods, and connectivity checks | Week 4 |
 | 5: Integration | All skills tested, audit log verified, README complete, release tagged | Week 5 |
 
 ---
@@ -271,11 +271,11 @@ Multus manifest.
 
 - **Plugin load:** `claude --plugin-dir . --debug 2>&1 | grep -E "(plugin|skill|hook)"` — all skills appear
 - **Codex instructions:** Run `codex "Summarize the active repository instructions and available OKE skills."` from the repo root and confirm it uses `AGENTS.md`.
-- **Skill 1:** Run `/oke-cluster-generator "private cluster, 3 node pools"` → verify 4 Terraform files generated + preflight report
-- **Skill 2:** Deliberately break a pod (wrong image) → run `/oke-troubleshooter "pods in ImagePullBackOff"` → verify ImagePullBackOff is top hypothesis with evidence quote
-- **Skill 2 OKE-specific:** Run `/oke-troubleshooter "cluster autoscaler is not adding nodes"` and `/oke-troubleshooter "DNS timeouts"` → verify helper scripts return structured evidence
-- **Skill 3:** Run `/oke-gva-deployer` → verify cluster/subnet/NSG discovery and generated node-pool command
-- **Skill 4:** Run `/oke-multihome-deployer` → verify generated pods expose `eth0` and `net1`, then ping peer pods over `net1`
+- **Skill 1:** Run `/oke-agent-plugin:oke-cluster-generator "private cluster, 3 node pools"` → verify Terraform files and preflight report
+- **Skill 2:** Deliberately break a pod (wrong image) → run `/oke-agent-plugin:oke-troubleshooter "pods in ImagePullBackOff"` → verify ImagePullBackOff is top hypothesis with evidence quote
+- **Skill 2 OKE-specific:** Run `/oke-agent-plugin:oke-troubleshooter "cluster autoscaler is not adding nodes"` and `/oke-agent-plugin:oke-troubleshooter "DNS timeouts"` → verify helper scripts return structured evidence
+- **Skill 3:** Run `/oke-agent-plugin:oke-gva-deployer` → verify cluster/subnet/NSG discovery and generated node-pool command
+- **Skill 4:** Run `/oke-agent-plugin:oke-multihome-deployer` → verify generated pods expose `eth0` and `net1`, then ping peer pods over `net1`
 - **Audit log:** After each skill run, inspect `~/.claude/oke-agent-audit.log` — confirm no credentials appear
 - **Script unit tests:** `bats tests/scripts/` — all pass
 

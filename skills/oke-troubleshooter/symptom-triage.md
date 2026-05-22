@@ -6,7 +6,7 @@ Use this table to map the user's symptom description to diagnostic domains. Star
 |------------------|-----------------|----------------------|
 | `ImagePullBackOff`, `ErrImagePull`, failed registry auth | Pod runtime, IAM/RBAC | Namespace? Image registry (OCIR/3rd-party)? Recently rotated secrets? |
 | `Pending` pods, `Unschedulable`, `Insufficient` resources | Pod scheduling, Node health | Which namespace/workload? Any recent cluster scale events? Require specific node labels/shapes? |
-| Autoscaler not adding nodes, `NotTriggerScaleUp`, max node group size, scale-up failed | Cluster Autoscaler / Node Pool Scaling, Pod scheduling, OCI infra | Which workload is Pending? Is cluster-autoscaler installed? Node pool min/max? Any OCI quota or capacity errors? |
+| Autoscaler not adding nodes, `NotTriggerScaleUp`, max node group size, scale-up failed | Cluster Autoscaler / Node Pool Scaling, Pod scheduling, OCI infra | Which workload is Pending? Is cluster-autoscaler installed? Node pool min/max? Any OCI service-limit or capacity errors? |
 | `CrashLoopBackOff`, `OOMKilled`, high restart counts | Pod runtime, Node health | First failure timestamp? Any recent config/secret changes? Container logs already reviewed? |
 | `Node NotReady`, `NodeReady=False`, `Kubelet stopped posting` | Node health, Control plane | Specific node pool or AD? Recent maintenance events or OCI alarms? |
 | kube-system add-on unhealthy, CoreDNS down, CSI controller down, CNI daemonset down, metrics missing | OKE Add-ons Health, Node health, Control plane | Which add-on? All nodes or one AD/node pool? Any recent upgrade or add-on change? |
@@ -18,7 +18,7 @@ Use this table to map the user's symptom description to diagnostic domains. Star
 | DPDK init fails, Mellanox `mlx5`, `vfio-pci`, `/dev/infiniband`, `ibv_devices`, hugepages, SR-IOV resources requested but no `net1`/`network-status` entries | Pod Networking / OCI CNI / IPAM, Node health, Pod runtime | Which pod/node? Which NADs and device-plugin resources? Does `network-status` show the requested networks? Are target VFs bound to `mlx5_core` or `vfio-pci`? Are hugepages and RDMA/verbs devices visible in the pod? |
 | Timeout reaching API server, `x509` errors, control-plane degraded | Control plane, Networking | Using public or private endpoint? Any recent API endpoint visibility changes? |
 | Private endpoint unreachable, kubeconfig exec auth fails, bastion/operator path broken | Private Cluster / API Endpoint Connectivity, Control plane, Networking | From which workstation or jump host? Public or private endpoint? OCI security token current? |
-| PVC stuck `Pending`, volume attachment failures, CSI errors | Storage, Node health | Block Volume or File Storage? Specific availability domain? Existing quota alarms? |
+| PVC stuck `Pending`, volume attachment failures, CSI errors | Storage, Node health | Block Volume or File Storage? Specific availability domain? Existing capacity or service-limit alarms? |
 | OCI limits exceeded, `TooManyRequests`, throttling | OCI infra, Control plane | Which service returned the error? Was there a recent surge in provisioning? |
 | `Forbidden`, RBAC denial, service account issues | IAM/RBAC, Pod runtime | Which user/service account? Recent policy updates? Using workload identity? |
 | Pod cannot call OCI API, workload identity auth failure, dynamic group mismatch | Workload Identity / OCI API From Pods, IAM/RBAC, Pod runtime | Which service account and namespace? Which OCI SDK/API? What auth error appears in pod logs? |

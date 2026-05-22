@@ -23,7 +23,7 @@ Supporting reference (load on demand):
 Scripts:
 - `../../scripts/gva-discover.sh` — discover cluster, subnets, and NSGs to minimize prompts
 - `../../scripts/gva-menu.sh` — guided interactive flow that consumes discovery data and prints CLI command + test manifest
-- `../../scripts/gva-cli-resolve.sh` — resolve the preview GVA OCI CLI workspace from env or known local paths
+- `../../scripts/gva-cli-resolve.sh` — resolve the preview GVA OCI CLI workspace from `OKE_GVA_CLI_HOME` or the repo-local `gva-cli` directory
 
 ---
 
@@ -115,7 +115,7 @@ Menu order:
 5) node count
 6) Availability Domains (allow one, two, or all three; comma-separated)
 7) primary node subnet
-8) image selection (shape-compatible only)
+8) image selection (filter by Kubernetes version; validate shape architecture/family compatibility before finalizing)
 9) Secondary VNIC profile fields:
    - `applicationResource` label
    - GVA secondary subnet
@@ -126,9 +126,7 @@ Menu order:
 Data presentation rules:
 - VCN menu must list all discovered VCNs in the target compartment (name + CIDR + OCID or selectable key).
 - Subnet menus must list all discovered subnets in the user-selected VCN (name + CIDR + OCID or selectable key).
-- Image menus must list only OKE images that both:
-  - match the cluster Kubernetes version, and
-  - are compatible with the selected node shape architecture/family (for example, exclude `aarch64` for x86 shapes).
+- Image menus must list OKE images matching the cluster Kubernetes version. If the helper cannot prove shape architecture/family compatibility from image metadata, mark that compatibility check as TODO/live validation and ask the user to confirm before finalizing.
 - NSG menus must include all discovered NSGs and a "none" option.
 - Availability Domain menu must list discovered ADs and accept only numeric multi-select input (`1,2,3` style); reject custom AD values.
 - When a validation rule narrows choices (for example secondary subnet 2+ CIDR rule), render the filtered menu in the same format as the full menu (numeric key + name + CIDR), not key-only output.

@@ -37,7 +37,7 @@ kubectl -n <namespace> describe <resource> <name>
 
 ## Prevention
 
-- Add one or more concrete preventive controls, alerts, runbooks, or quota checks.
+- Add one or more concrete preventive controls, alerts, runbooks, or capacity/service-limit checks.
 
 ## Evidence Gaps
 

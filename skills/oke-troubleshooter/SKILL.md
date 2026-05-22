@@ -280,7 +280,7 @@ Helper scripts:
 2. Call out any limitations: missing tooling, commands that failed, domains not yet explored, and missing dependency telemetry.
 3. Offer next actions:
    - Rerun for another namespace/resource.
-   - Deep-dive into IAM or quota analysis.
+   - Deep-dive into IAM, capacity, or service-limit evidence when the collected data points there.
    - Export findings to a file (future enhancement).
 4. Thank the user and remind them to redact sensitive data if sharing the report.
 

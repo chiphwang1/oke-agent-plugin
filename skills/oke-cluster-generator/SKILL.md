@@ -29,6 +29,7 @@ Split `$ARGUMENTS` on whitespace. Apply these rules in order:
 
 | Pattern | Matches when token... | Variable set |
 |---------|-----------------------|--------------|
+| `FAST_PATH` | matches (case-insensitive): `fast-path`, `fastpath`, `quick-start`, `quickstart`, `starter-stack`, `starter`, `minimal` | Set `FAST_PATH_MODE = true`; consume the token before cluster-name parsing |
 | `WORKLOAD_TYPE` | matches (case-insensitive): `ai`, `ai/ml`, `aiml`, `ml`, `gpu`, `hpc`, `microservices`, `general` | Set `WORKLOAD_TYPE`; skip Domain 1 Q1 |
 | `TARGET_REGION` | matches an OCI region pattern `<geo>-<city>-<number>` (e.g. `us-ashburn-1`) | Set `TARGET_REGION`; skip Pre-flight Step 3 region selection |
 | `CLUSTER_NAME` | any remaining token that doesn't match the above | Use as suggested `cluster_name`; confirm with user in Domain 1 |
@@ -46,17 +47,20 @@ If any values were pre-filled from `$ARGUMENTS`, display this before Pre-flight 
 > "Detected from invocation: [list each pre-filled variable and its resolved value].
 > These answers are applied automatically — you can revise them at any domain summary."
 
+If `FAST_PATH_MODE = true`, do not treat the fast-path trigger token as `CLUSTER_NAME`.
+Continue with the Fast Path workflow after pre-flight discovery.
+
 If `$ARGUMENTS` is empty, proceed with the full questionnaire.
 
 ### Example Invocations
 
 | Invocation | Effect |
 |------------|--------|
-| `/oke-cluster-generator` | Full questionnaire, no pre-fills |
-| `/oke-cluster-generator fast-path us-ashburn-1 demo-private-oke` | Fast path starter stack with region and name pre-filled |
-| `/oke-cluster-generator ai/ml` | WORKLOAD_TYPE = "AI / ML" pre-filled |
-| `/oke-cluster-generator hpc us-frankfurt-1` | WORKLOAD_TYPE = "HPC", TARGET_REGION pre-filled |
-| `/oke-cluster-generator general us-ashburn-1 prod-cluster` | All three pre-filled |
+| `/oke-agent-plugin:oke-cluster-generator` | Full questionnaire, no pre-fills |
+| `/oke-agent-plugin:oke-cluster-generator fast-path us-ashburn-1 demo-private-oke` | Fast path starter stack with region and name pre-filled |
+| `/oke-agent-plugin:oke-cluster-generator ai/ml` | WORKLOAD_TYPE = "AI / ML" pre-filled |
+| `/oke-agent-plugin:oke-cluster-generator hpc us-frankfurt-1` | WORKLOAD_TYPE = "HPC", TARGET_REGION pre-filled |
+| `/oke-agent-plugin:oke-cluster-generator general us-ashburn-1 prod-cluster` | All three pre-filled |
 
 ---
 
@@ -132,7 +136,7 @@ known pattern in these references.
 ## OCI CLI Integration
 
 Use the `Bash` tool throughout the questionnaire to query the user's tenancy and populate
-`AskUserQuestion` options with real data (K8s versions, compartments, VCNs, shapes, vault
+choice prompts with real data (K8s versions, compartments, VCNs, shapes, vault
 keys, add-ons). Requires: OCI CLI installed, `~/.oci/config` configured, read access to
 IAM, CE, Compute, Network, KMS, and Limits. For failures, apply the CLI Fallback Pattern
 (see Behavioral Guidelines).
@@ -149,18 +153,20 @@ within the approved reference sources."
 ## Behavioral Guidelines
 
 - Explain *why* a configuration choice matters before asking the user to decide.
-- Flag choices that may incur significant cost, require service limit increases, or have known
+- Flag choices that may incur significant cost, require service-limit increases, or have known
   OCI regional availability constraints.
 - Default to production-grade configurations (HA control plane, private nodes, encrypted
   volumes) unless the user explicitly requests otherwise.
 - Never generate incomplete Terraform that would cause a `plan` or `apply` to fail.
 - Present one domain at a time — summarize choices and confirm before moving to the next.
-- **Use the `AskUserQuestion` tool for every fixed-choice question.** Present options as
-  clickable choices with a short `label` and a `description` explaining the trade-off.
-  Use `multiSelect: true` when multiple items may apply (e.g., gateways, add-ons).
-  Reserve free-text follow-up only for values that require user-specific input such as
-  CIDRs, OCIDs, cluster names, or node counts.
-- You may batch up to **4 related questions** in a single `AskUserQuestion` call when they
+- **Use `AskUserQuestion` for fixed-choice questions when the runtime provides it.**
+  Present options as clickable choices with a short `label` and a `description`
+  explaining the trade-off. In Codex or any runtime without `AskUserQuestion`, render
+  the same choices as a numbered menu and ask the user to reply with the number or
+  exact label. Use multi-select only when multiple items may apply (e.g., gateways,
+  add-ons). Reserve free-text follow-up only for values that require user-specific
+  input such as CIDRs, OCIDs, cluster names, or node counts.
+- You may batch up to **4 related fixed-choice questions** in a single prompt when they
   are independent of each other. Split into separate calls when a later question depends
   on the answer to an earlier one (e.g., ask VCN source first, then ask for CIDR only if
   "New VCN" is chosen).
@@ -168,7 +174,7 @@ within the approved reference sources."
   (Yes / Revise) before moving to the next domain.
 - **Use the `Bash` tool to run OCI CLI commands** whenever real tenancy data can improve a
   question (e.g., list actual compartments, real K8s versions, available shapes). Always
-  run the CLI call *before* presenting the `AskUserQuestion` so options reflect live data.
+  run the CLI call *before* presenting the choice prompt so options reflect live data.
 - **Parse CLI JSON output** with `--query` JMESPath expressions or `| python3 -c` to extract
   only the fields needed (name, OCID, state). Never dump raw JSON to the user.
 
@@ -433,8 +439,12 @@ oci limits value list \
   --output json
 ```
 
+TODO(live validation): confirm the exact OCI Limits command and limit-name mapping for
+GPU/HPC/RDMA shape families in the target tenancy before treating a zero or missing
+value as conclusive.
+
 If any GPU/HPC quota value is `0`, warn the user:
-> "Warning: Your tenancy shows 0 quota for [shape family]. You will need a service limit
+> "Warning: Your tenancy shows 0 available service-limit value for [shape family]. You will need a service-limit
 > increase before provisioning these nodes."
 
 For **each** node pool (1 through `NODE_POOL_COUNT`), repeat Steps 2–4. At the start of
@@ -487,8 +497,8 @@ Store as `POOL_SHAPE_i`. Then apply cross-domain validation:
    > "Note: GPU shapes are typically used with AI/ML or HPC workloads. Your workload type
    > is [WORKLOAD_TYPE]. Proceeding — let me know if you'd like to revise."
 
-3. If the quota check from the CLI step showed quota = 0 for this shape family, repeat
-   the quota warning.
+3. If the service-limit check from the CLI step showed no available value for this shape family, repeat
+   the service-limit warning.
 
 **Step 4** — Use `AskUserQuestion` with 3 questions:
 
@@ -663,6 +673,8 @@ oci ce addon-option list \
 
 Use the returned add-on names and descriptions to populate the multiSelect options below.
 Fall back to the static list in `reference.md § Static OKE Managed Add-ons` if the command fails.
+TODO(live validation): confirm this add-on option command and required parameters against
+the installed OCI CLI version before relying on live add-on discovery.
 
 Use `AskUserQuestion` with 2–3 questions:
 
@@ -734,7 +746,7 @@ After all domains are confirmed, produce a concise summary:
 
 - **Cluster topology** — Control plane visibility, CNI, node pool layout, ADs/FDs.
 - **Key design decisions** — Rationale for each major choice.
-- **Cost / quota warnings** — Flag bare metal shapes, GPU quotas, cross-AD data transfer costs.
+- **Cost / service-limit warnings** — Flag bare metal shapes, GPU/HPC service limits, cross-AD data transfer costs.
 - **Known constraints** — Unsupported shape/CNI combinations, regional availability limits.
 
 Ask the user to confirm or revise before proceeding to code generation.

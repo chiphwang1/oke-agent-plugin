@@ -27,7 +27,9 @@ Mark the first entry as "Latest GA (Recommended)".
 
 ## Static OKE Managed Add-ons
 
-Use this list when `oci ce addon-option list` fails or returns empty output.
+Use this list when live add-on discovery fails or returns empty output. TODO(live validation):
+confirm the exact `oci ce addon-option` command and required parameters for the installed
+OCI CLI version before relying on live discovery.
 These add-ons apply to Enhanced clusters only.
 
 | Name | Description |

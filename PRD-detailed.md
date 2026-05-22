@@ -163,7 +163,7 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 - 50% reduction in time to produce initial Terraform/ORM assets.
 - 30% reduction in average incident triage time for OKE issues.
 - 80% first‑attempt success rate for GVA node pool creation in test environments.
- - Define baseline and measurement method for each metric before tracking.
+- Define baseline and measurement method for each metric before tracking.
 
 ## 12. Risks and Mitigations
 - **CLI not authenticated:** fail fast with remediation instructions.

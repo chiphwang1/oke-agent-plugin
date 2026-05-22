@@ -156,6 +156,7 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
     - optionally enables logging (with explicit user approval path)
     - extracts log issue signals for ranking
 - **Normalization tips**: Note load balancer lifecycle (`PROVISIONING`, `FAILED`), security list/NSG rules, CNI pod status, service annotations impacting provisioning. Explicitly record LB logging status as `enabled`, `disabled`, or `unknown`, and include `logging_status_source` showing which check(s) succeeded.
+- **TODO(live validation)**: Confirm the exact OCI CLI fields and Logging Search syntax for LB access-log discovery in the target OCI CLI version before treating log absence as conclusive.
 - **If LB logs are disabled or unknown**: recommend enabling access logs before closing the incident so future RCA has request-level evidence.
   - Offer operator action:
     - `No (report only)`
@@ -330,12 +331,12 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - `oci iam dynamic-group list --compartment-id <tenancy>`
 - **Normalization tips**: Summarize denied verbs, missing role bindings, IAM policy gaps affecting OCI API access.
 
-## OCI Infrastructure / Quotas
+## OCI Infrastructure / Capacity and Service Limits
 - **OCI**
   - `oci limits resource-availability list --compartment-id <compartment> --service-name <service>`
-  - `oci limits quota get --compartment-id <compartment> --quota-id <ocid>`
+  - TODO(live validation): add OCI quota commands only after confirming the exact CLI resource path and required quota OCID/source from the user's tenancy.
   - `oci monitoring alarm-status list-alarms-status --compartment-id <compartment> --status FIRING --all`
-- **Normalization tips**: Present remaining vs. used quota, active alarms, recent throttling metrics.
+- **Normalization tips**: Present remaining capacity/service-limit signals, active alarms, recent throttling metrics, and explicitly label missing quota data as an evidence gap.
 
 ---
 
