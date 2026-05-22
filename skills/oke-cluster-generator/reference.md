@@ -47,6 +47,10 @@ These add-ons apply to Enhanced clusters only.
 
 Read this table during Phase 3 code generation. Use the exact variable names shown in the
 "Terraform Variable" column — do not guess or infer variable names from the module README.
+TODO(live validation): Reconcile this mapping with the currently approved
+`terraform-oci-oke` module version before claiming generated Terraform has been
+plan-verified. If live validation is unavailable, call out the mapping as a
+module-version assumption in the generated summary.
 
 | Domain | User Selection / Answer | Terraform Variable | Type | Notes |
 |--------|------------------------|-------------------|------|-------|

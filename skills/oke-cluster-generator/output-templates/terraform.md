@@ -84,6 +84,11 @@ module "oke" {
 }
 ```
 
+TODO(live validation): Before using this template for an operator-ready bundle,
+confirm the current `terraform-oci-oke` module major version and variable names
+against the approved module source. If a variable has changed, update
+`reference.md` and this template together instead of guessing.
+
 Remove lines for variables not applicable to this deployment (e.g., remove `kms_key_id`
 if Oracle-managed encryption was chosen, remove `vcn_id` if creating a new VCN, etc.).
 
