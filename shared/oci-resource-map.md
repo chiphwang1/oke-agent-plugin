@@ -57,7 +57,7 @@ Use the manual command chains below when the correlator cannot resolve a link or
    ```
 2. Describe load balancer health:
    ```bash
-   oci network load-balancer get --load-balancer-id <lb-ocid>
+   oci lb load-balancer get --load-balancer-id <lb-ocid>
    ```
 3. Review backend set health:
    ```bash

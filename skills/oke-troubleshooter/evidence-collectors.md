@@ -21,7 +21,8 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - `kubectl get events -n <ns> --field-selector involvedObject.name=<pod> --sort-by=.lastTimestamp`
 - **OCI**
   - `oci ce node-pool list --compartment-id <compartment>` (ensure node pool capacity)
-  - `oci limits resource-availability get --service-name compute --limit-name standard3-count --availability-domain <ad>`
+  - `oci limits resource-availability get --compartment-id <compartment> --service-name compute --limit-name <shape-limit-name> --availability-domain <ad>`
+  - TODO(live validation): resolve the exact compute `limit-name` for the target shape from `oci limits value list` before treating remaining capacity as conclusive.
 - **Normalization tips**: Highlight scheduling failure reasons (`0/3 nodes available`, taints), summarize resource requests vs. node capacity, include current node pool size.
 
 ## Pod Runtime
@@ -306,8 +307,9 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - `kubectl logs -n kube-system -l app=oci-csi-controller --tail=200`
 - **OCI**
   - `oci bv volume get --volume-id <ocid>`
-  - `oci fs filesystem get --file-system-id <ocid>` (FSS)
-  - `oci limits resource-availability get --service-name block-storage --limit-name block-storage-volumes`
+  - `oci fs file-system get --file-system-id <ocid>` (FSS)
+  - `oci limits resource-availability get --compartment-id <compartment> --service-name block-storage --limit-name <block-storage-limit-name>`
+  - TODO(live validation): resolve the exact block-storage `limit-name` for the tenancy before treating limit data as conclusive.
 - **Normalization tips**: Extract CSI error codes, quota/limit responses, volume attachment status, and AD placement mismatches.
 
 ## Control Plane
@@ -317,8 +319,9 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
   - `kubectl get --raw='/livez?verbose'`
 - **OCI**
   - `oci ce cluster get --cluster-id <ocid>`
-  - `oci ce cluster-options get --cluster-id <ocid>`
+  - `oci ce cluster-options get --cluster-option-id <cluster_ocid> [--compartment-id <compartment>]`
   - `oci logging search` targeting OKE control plane log groups
+  - TODO(live validation): confirm the target tenancy exposes useful cluster-specific options through `cluster-options get`; otherwise use `--cluster-option-id all` only as capability context.
 - **Normalization tips**: Flag readiness or liveness checks returning non-`ok`, endpoint visibility changes, upgrade operations in progress, and capture RBAC/auth errors separately when the raw health endpoints are inaccessible.
 
 ## IAM / RBAC
