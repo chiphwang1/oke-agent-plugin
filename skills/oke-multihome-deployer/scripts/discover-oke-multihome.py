@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from typing import Any
@@ -274,6 +275,23 @@ def main() -> int:
         env["OCI_CLI_PROFILE"] = args.profile
     if args.auth:
         env["OCI_CLI_AUTH"] = args.auth
+
+    if shutil.which("oci") is None:
+        return emit_error(
+            1,
+            "OCI_CLI_NOT_FOUND",
+            "OCI CLI is not installed or not on PATH.",
+            "Install OCI CLI, authenticate to the target tenancy, and rerun discovery.",
+        )
+
+    needs_kubeconfig_lookup = not args.cluster_id and not (args.cluster_name and args.compartment_id)
+    if needs_kubeconfig_lookup and shutil.which("kubectl") is None:
+        return emit_error(
+            1,
+            "KUBECTL_NOT_FOUND",
+            "kubectl is not installed or not on PATH, and discovery needs kubeconfig to resolve the cluster OCID.",
+            "Install kubectl, pass --cluster-id, or pass --cluster-name with --compartment-id.",
+        )
 
     cluster_id = (
         args.cluster_id

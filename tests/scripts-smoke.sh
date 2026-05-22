@@ -615,6 +615,17 @@ MOCK_KUBECTL_FAIL
   assert_eq "1" "$rc" "multihome discovery exits 1 for unresolved cluster"
   err="$(cat "$TMPDIR_BASE/t9.err")"
   assert_json_expr "$err" "obj['error_code'] == 'CLUSTER_OCID_NOT_RESOLVED'" "multihome discovery emits JSON expected error"
+
+  mock_bin="$TMPDIR_BASE/no-oci"
+  mkdir -p "$mock_bin"
+  set +e
+  PATH="$mock_bin" "$(command -v python3)" "$REPO_ROOT/skills/oke-multihome-deployer/scripts/discover-oke-multihome.py" \
+    --cluster-id ocid1.cluster.oc1..abc 1>/dev/null 2>"$TMPDIR_BASE/t10.err"
+  rc=$?
+  set -e
+  assert_eq "1" "$rc" "multihome discovery exits 1 when OCI CLI is missing"
+  err="$(cat "$TMPDIR_BASE/t10.err")"
+  assert_json_expr "$err" "obj['error_code'] == 'OCI_CLI_NOT_FOUND'" "multihome discovery emits explicit missing OCI CLI error"
 }
 
 run_test_troubleshooter_skill_has_local_fallback() {
