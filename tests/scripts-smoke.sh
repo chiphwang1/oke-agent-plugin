@@ -556,6 +556,10 @@ run_test_gva_cli_resolve_uses_env_override() {
   assert_json_expr "$out" "obj['home'].endswith('/custom-gva-cli')" "gva-cli-resolve prefers env override"
   assert_json_expr "$out" "obj['has_activate'] is True" "gva-cli-resolve sees activate path"
   assert_json_expr "$out" "obj['has_wheel'] is True" "gva-cli-resolve sees wheel path"
+  if rg -q "codex_oke_plugin|/Users/.*/Desktop/projects" "$REPO_ROOT/scripts/gva-cli-resolve.sh"; then
+    echo "FAIL: gva-cli-resolve should not include workstation-specific fallback paths" >&2
+    exit 1
+  fi
 }
 
 run_test_gva_menu_rejects_invalid_ipcount() {
@@ -569,6 +573,48 @@ run_test_gva_menu_rejects_invalid_ipcount() {
   assert_contains "$out" "ipCount must be an integer between 1 and 256." "gva-menu warns on invalid ipCount"
   assert_contains "$out" "Using cluster Kubernetes version: v1.31.1" "gva-menu still consumes discovery output"
   assert_contains "$out" "--secondary-vnics" "gva-menu still prints command after correction"
+}
+
+run_test_gva_menu_cni_failure_json() {
+  echo "- gva-menu emits JSON for unsupported CNI"
+  local rc err
+  set +e
+  printf 'cluster-a\nus-ashburn-1\n\nocid1.cluster.oc1..abc\nGrCh:US-ASHBURN-AD-1\nocid1.vcn.oc1..vcn\nocid1.subnet.oc1..primary\npool1\nVM.Standard.E5.Flex\n2\n16\n3\nocid1.image.oc1..img\n2\n' | \
+    "$REPO_ROOT/scripts/gva-menu.sh" >/dev/null 2>"$TMPDIR_BASE/t7.err"
+  rc=$?
+  set -e
+  assert_eq "1" "$rc" "gva-menu exits expected error when CNI unsupported"
+  err="$(cat "$TMPDIR_BASE/t7.err")"
+  assert_json_expr "$err" "obj['error_code'] == 'GVA_REQUIRES_VCN_NATIVE_CNI'" "gva-menu emits structured JSON error"
+}
+
+run_test_multihome_python_errors_are_json() {
+  echo "- multihome Python helpers emit JSON errors"
+  local rc err mock_bin
+  set +e
+  python3 "$REPO_ROOT/skills/oke-multihome-deployer/scripts/generate-multihome-manifest.py" \
+    --namespace default 1>/dev/null 2>"$TMPDIR_BASE/t8.err"
+  rc=$?
+  set -e
+  assert_eq "2" "$rc" "manifest generator exits 2 for invalid arguments"
+  err="$(cat "$TMPDIR_BASE/t8.err")"
+  assert_json_expr "$err" "obj['error_code'] == 'INVALID_ARGUMENT'" "manifest generator emits JSON argparse error"
+
+  mock_bin="$TMPDIR_BASE/no-kube"
+  mkdir -p "$mock_bin"
+  cat > "$mock_bin/kubectl" <<'MOCK_KUBECTL_FAIL'
+#!/usr/bin/env bash
+exit 1
+MOCK_KUBECTL_FAIL
+  chmod +x "$mock_bin/kubectl"
+  set +e
+  PATH="$mock_bin:$PATH" python3 "$REPO_ROOT/skills/oke-multihome-deployer/scripts/discover-oke-multihome.py" \
+    --cluster-name missing 1>/dev/null 2>"$TMPDIR_BASE/t9.err"
+  rc=$?
+  set -e
+  assert_eq "1" "$rc" "multihome discovery exits 1 for unresolved cluster"
+  err="$(cat "$TMPDIR_BASE/t9.err")"
+  assert_json_expr "$err" "obj['error_code'] == 'CLUSTER_OCID_NOT_RESOLVED'" "multihome discovery emits JSON expected error"
 }
 
 run_test_troubleshooter_skill_has_local_fallback() {
@@ -679,6 +725,32 @@ assert (root / "skills").is_dir(), "skills directory missing"
 PY
 }
 
+run_test_skill_consistency_text() {
+  echo "- skill trigger and terminology consistency checks"
+  if rg -q "Oracle Kubernetes Engine" \
+    "$REPO_ROOT/README.md" \
+    "$REPO_ROOT/.claude-plugin/plugin.json" \
+    "$REPO_ROOT/.codex-plugin/plugin.json" \
+    "$REPO_ROOT/skills"; then
+    echo "FAIL: use OCI Kubernetes Engine terminology in public plugin text" >&2
+    exit 1
+  fi
+
+  local cluster_skill gva_skill multihome_skill troubleshooter_refs
+  cluster_skill="$(cat "$REPO_ROOT/skills/oke-cluster-generator/SKILL.md")"
+  gva_skill="$(cat "$REPO_ROOT/skills/oke-gva-deployer/SKILL.md")"
+  multihome_skill="$(cat "$REPO_ROOT/skills/oke-multihome-deployer/SKILL.md")"
+  troubleshooter_refs="$(cat "$REPO_ROOT/skills/oke-troubleshooter/evidence-collectors.md")"
+
+  assert_contains "$cluster_skill" "FAST_PATH_MODE = true" "cluster generator parses fast-path token"
+  assert_contains "$cluster_skill" "runtime without \`AskUserQuestion\`" "cluster generator documents Codex prompt fallback"
+  assert_contains "$cluster_skill" "TODO(live validation): confirm this add-on option command" "cluster generator flags unverified add-on command"
+  assert_contains "$gva_skill" "TODO/live validation" "GVA skill labels unproven image compatibility"
+  assert_contains "$multihome_skill" "For broad incident RCA" "multihome trigger avoids broad troubleshooter overlap"
+  assert_contains "$multihome_skill" "TODO(live validation): pin this manifest" "multihome manifest pinning is tracked as live-validation TODO"
+  assert_contains "$troubleshooter_refs" "Capacity and Service Limits" "troubleshooter avoids broad quota-only framing"
+}
+
 run_test_oke_troubleshooter_helpers() {
   echo "- OKE troubleshooting helper scripts return JSON"
   local out
@@ -746,12 +818,15 @@ main() {
   run_test_gva_discover_quoted_cluster_name
   run_test_gva_cli_resolve_uses_env_override
   run_test_gva_menu_rejects_invalid_ipcount
+  run_test_gva_menu_cni_failure_json
+  run_test_multihome_python_errors_are_json
   run_test_troubleshooter_skill_has_local_fallback
   run_test_troubleshooter_control_plane_recipe_uses_readyz
   run_test_multihome_manifest_generator
   run_test_multihome_python_syntax
   run_test_golden_outputs
   run_test_codex_metadata
+  run_test_skill_consistency_text
   run_test_oke_troubleshooter_helpers
   run_test_oke_deep_troubleshooter_helpers
 
