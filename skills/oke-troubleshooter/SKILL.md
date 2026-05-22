@@ -30,6 +30,7 @@ Helper scripts:
 - `../../scripts/oke-ocir-image-pull-check.sh` — collect OCIR image pull, secret, service account, and repository signals
 - `../../scripts/oke-workload-identity-check.sh` — collect service account, pod log, dynamic group, and IAM policy signals
 - `../../scripts/oke-incident-timeline.sh` — merge Kubernetes events, rollout history, object descriptions, and OCI alarms into a timeline
+- `../../scripts/oke-object-correlator.sh` — build a Kubernetes-to-OCI object graph for pods, nodes, services, ingress, PVCs, load balancers, instances, VNICs, volumes, and node pools
 
 ---
 
@@ -142,7 +143,28 @@ Helper scripts:
 ---
 
 ## Phase 3 — Evidence Collection
-1. For each selected domain:
+1. Build the OCI object correlation graph before domain-specific collectors when enough selectors are known.
+   - Run the correlator with all discovered selectors, even if only one target object is known:
+     ```bash
+     bash ../../scripts/oke-object-correlator.sh \
+       --namespace <ns> \
+       --cluster-id <cluster_ocid> \
+       --compartment-id <compartment_ocid> \
+       --region <region> \
+       [--pod <pod>] \
+       [--deployment <deployment>] \
+       [--service <service>] \
+       [--ingress <ingress>] \
+       [--pvc <pvc>] \
+       [--node <node>]
+     ```
+   - Treat the output as evidence with fields: `domain`, `graph.kubernetes`, `graph.oci`, `graph.edges`, `findings`, `anomalies`, `raw_snippets`, and `fallback_used`.
+   - Use the graph to narrow follow-on checks. Examples:
+     - If a Service maps to an OCI Load Balancer with unhealthy backend health, focus on backend set, node subnet, NSG, and endpoint readiness.
+     - If a Pod maps to a Node and Compute instance, prefer that node pool, AD, subnet, and VNIC path for node/network checks.
+     - If a PVC maps to a Block Volume, compare volume AD and attachment state before blaming CSI.
+   - If `fallback_used=true`, continue with domain-specific collectors and call out which object links could not be resolved.
+2. For each selected domain:
    - Look up required commands in `evidence-collectors.md`.
    - Build command batches with placeholders filled (namespace, resource names, compartment OCID, time window, and dependency hop identifiers when present).
    - **Auto-run read-only evidence commands without prompting** when tools are available.
@@ -220,7 +242,7 @@ Helper scripts:
        - `node_doctor_result` (`pass` | `fail` | `unknown`) and `node_doctor_command_rc`
        - `node_doctor_findings`, `node_doctor_raw_snippet`, `node_doctor_fallback_reason`
      - If the helper script reports failure (debug blocked, image pull, chroot/sudo/script missing), set fallback details and continue Node Health evidence collection.
-2. Assemble collector input payload:
+3. Assemble collector input payload:
    ```json
    {
      "symptom": "...",
@@ -234,15 +256,16 @@ Helper scripts:
        "critical_path": [],
        "latency_budget_ms": {}
      },
+     "object_graph": {...},
      "fallbacks": {"kubectl": false, "oci": true},
      "compartment_ocid": "..."
    }
    ```
-3. Execute the prepared command list.
+4. Execute the prepared command list.
    - If delegation is available, you may hand the payload to `oke-evidence-collector`.
    - Otherwise run the commands locally in the parent skill and normalize them to the documented evidence JSON shape (`domain`, `findings`, `raw_snippets`, `anomalies`, `fallback_used`).
    - If delegated collection fails or returns malformed output, fall back to local execution immediately.
-4. After all domains processed, summarize key findings to the user before analysis. Note any `fallback_used` signals or missing data.
+5. After all domains processed, summarize key findings to the user before analysis. Note any `fallback_used` signals or missing data.
 
 ---
 
@@ -253,6 +276,7 @@ Helper scripts:
      "symptom": "...",
      "domains": [...],
      "dependency_map": {...},
+     "object_graph": {...},
      "evidence": [...],
       "fallbacks": {"kubectl": false, "oci": true}
    }
@@ -265,6 +289,7 @@ Helper scripts:
      - `3-5`: plausible but missing a decisive signal
      - `1-2`: weak signal or mostly evidence-gap guidance
    - Ensure each hypothesis includes score, bottleneck hop attribution when relevant, evidence bullets, remediation commands, and prevention guidance.
+   - Prefer hypotheses that are supported by explicit graph edges across Kubernetes and OCI resources over hypotheses supported only by isolated symptoms.
    - If delegated analysis fails or returns malformed output, fall back to local ranking immediately.
 3. Validate that evidence quotes reference actual snippets collected. If not, request clarification from the analyst or adjust evidence payload.
 

@@ -139,6 +139,8 @@ It covers:
 - Load balancers, private endpoints, DNS, OCIR pulls, Workload Identity, and ingress
 - Autoscaler and node-pool scale-up failures
 - Storage, PVCs, CSI logs, and OCI limits
+- OCI object correlation for Pod-to-Node-to-Instance, Service/Ingress-to-LB,
+  PVC-to-volume, VNIC/subnet, and node-pool graph evidence
 - Incident timelines across Kubernetes events, rollouts, object descriptions, and OCI
   alarms
 
@@ -153,6 +155,33 @@ Example prompts:
 
 Example: [successful transcript](examples/transcripts/oke-troubleshooter.md) and
 [sample troubleshooting report](examples/outputs/oke-troubleshooter/final-report.md).
+
+The troubleshooter runs `scripts/oke-object-correlator.sh` before domain-specific
+collectors when a namespace and at least one selector are known. The correlator builds
+a read-only graph that links Kubernetes resources to OCI resources, so hypothesis
+ranking can use explicit paths like:
+
+```text
+pod/default/web-0 -> node/node-a -> instance/ocid1.instance...
+service/default/web -> loadbalancer/ocid1.loadbalancer...
+pvc/default/data -> pv/pvc-123 -> volume/ocid1.volume...
+```
+
+You can run the correlator directly when you want the graph without a full
+troubleshooting session:
+
+```bash
+./scripts/oke-object-correlator.sh \
+  --namespace default \
+  --cluster-id <cluster_ocid> \
+  --compartment-id <compartment_ocid> \
+  --region <region> \
+  --pod web-0 \
+  --service web
+```
+
+The output includes `graph.kubernetes`, `graph.oci`, `graph.edges`, `findings`,
+`anomalies`, and `fallback_used`.
 
 ### Configure GVA Node Pools
 

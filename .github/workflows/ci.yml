@@ -18,6 +18,11 @@ jobs:
           set -euo pipefail
           bash -n scripts/*.sh
 
+      - name: Offline smoke tests
+        run: |
+          set -euo pipefail
+          bash tests/scripts-smoke.sh
+
       - name: Shellcheck
         run: |
           set -euo pipefail

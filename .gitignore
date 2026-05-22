@@ -7,3 +7,20 @@
 # Editor/IDE local files
 .vscode/
 .idea/
+
+# Local Python/OCI helper environments
+.venv/
+venv/
+.gva-cli/
+gva-cli/
+
+# Generated diagnostics and local run artifacts
+node-doctor-results*/
+*.log
+*.tmp
+tmp/
+
+# Local scratch notes produced during agent sessions
+finalized-changelog.txt
+GVA_DEMO.md
+agents/oke-repo-committer.md

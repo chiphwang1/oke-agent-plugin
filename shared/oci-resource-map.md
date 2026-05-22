@@ -2,6 +2,33 @@
 
 Use these command chains to relate Kubernetes objects to Oracle Cloud Infrastructure resources during troubleshooting.
 
+## Automated Correlation
+Use the object correlator first when you have a namespace and one or more target selectors. It runs read-only `kubectl` and `oci` lookups and returns a normalized graph with Kubernetes nodes, OCI nodes, and edges between them.
+
+```bash
+./scripts/oke-object-correlator.sh \
+  --namespace <ns> \
+  --cluster-id <cluster-ocid> \
+  --compartment-id <compartment-ocid> \
+  --region <region> \
+  [--pod <pod>] \
+  [--deployment <deployment>] \
+  [--service <service>] \
+  [--ingress <ingress>] \
+  [--pvc <pvc>] \
+  [--node <node>]
+```
+
+Expected graph edges include:
+- `scheduled_on`: Pod to Kubernetes node.
+- `runs_on_instance`: Kubernetes node to OCI Compute instance.
+- `has_vnic`: OCI instance to VNIC attachment.
+- `attached_to_subnet`: VNIC to subnet.
+- `provisions`: Kubernetes Service or Ingress to OCI Load Balancer.
+- `bound_to` and `backs_onto`: PVC to PV to OCI Block Volume.
+
+Use the manual command chains below when the correlator cannot resolve a link or when you need to inspect a specific object in more detail.
+
 ## Pod → Node → Instance
 1. Identify the node hosting the pod:
    ```bash
@@ -15,6 +42,13 @@ Use these command chains to relate Kubernetes objects to Oracle Cloud Infrastruc
    ```bash
    oci compute instance get --instance-id <instance-ocid>
    ```
+4. List VNIC attachments for the instance:
+   ```bash
+   oci compute vnic-attachment list \
+     --compartment-id <compartment-ocid> \
+     --instance-id <instance-ocid> \
+     --all
+   ```
 
 ## Service / Ingress → Load Balancer
 1. Obtain OCI load balancer OCID from annotations:
@@ -27,7 +61,12 @@ Use these command chains to relate Kubernetes objects to Oracle Cloud Infrastruc
    ```
 3. Review backend set health:
    ```bash
-   oci network load-balancer backend-set-health get \
+   oci lb load-balancer-health get \
+     --load-balancer-id <lb-ocid>
+   ```
+   For a specific backend set:
+   ```bash
+   oci lb backend-set-health get \
      --load-balancer-id <lb-ocid> \
      --backend-set-name <backend-set>
    ```
