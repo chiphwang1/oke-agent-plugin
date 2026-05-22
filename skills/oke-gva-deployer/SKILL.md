@@ -1,6 +1,6 @@
 ---
 name: oke-gva-deployer
-description: Use this skill when the user asks to enable, deploy, or configure Generic VNIC Attachment (GVA) for OCI Kubernetes Engine (OKE), create/update node pools with secondary VNIC profiles, map Application Resources to workloads, or explain GVA functionality, constraints, and scheduling behavior.
+description: Use this skill when the user asks to enable, deploy, or configure Generic VNIC Attachment (GVA) for OCI Kubernetes Engine (OKE), create/update node pools with secondary VNIC profiles, map Application Resources to workloads, or explain GVA functionality, constraints, and scheduling behavior. Do not use it for general OKE incident RCA or for deploying Multus test pods after a GVA node pool already exists; use oke-troubleshooter or oke-multihome-deployer for those surfaces.
 ---
 
 # OKE Generic VNIC Attachment (GVA) Deployer

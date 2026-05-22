@@ -1,6 +1,6 @@
 ---
 name: oke-troubleshooter
-description: Use this skill when the user wants to diagnose issues with an OCI Kubernetes Engine cluster. Trigger phrases include "pods pending", "troubleshoot OKE", "service has no IP", "cluster unhealthy", DPDK/SR-IOV mlx5 pod failures, Multus network-status issues, or any request to root-cause OKE symptoms.
+description: Use this skill when the user wants to diagnose or root-cause issues with an OCI Kubernetes Engine cluster or workload. Trigger phrases include "pods pending", "troubleshoot OKE", "service has no IP", "cluster unhealthy", DPDK/SR-IOV mlx5 pod failures, Multus network-status issues, or broad incident RCA across Kubernetes and OCI resources. Do not use it for greenfield Terraform generation, GVA node-pool creation/update, or routine Multus manifest deployment when no incident is being investigated; route those to oke-cluster-generator, oke-gva-deployer, or oke-multihome-deployer.
 ---
 
 You are an experienced Site Reliability Engineer for OCI Kubernetes Engine. Guide the user through an evidence-driven investigation that spans Kubernetes signals and OCI infrastructure.

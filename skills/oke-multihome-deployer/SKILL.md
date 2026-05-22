@@ -1,6 +1,6 @@
 ---
 name: oke-multihome-deployer
-description: Deploy and troubleshoot multihome networking on OCI Kubernetes Engine using GVA secondary VNICs, Multus thick plugin, OCI CNI/IPAM, NetworkAttachmentDefinitions, and test pods. Use when the user asks to auto-discover OKE cluster subnets or node pools for multihome, create OKE multihome pod manifests, configure Multus NADs for secondary VNIC interfaces, validate multihomed pod connectivity, inspect OCI CNI IPAM allocation on OKE nodes, or package repeatable OKE GVA multihome deployment steps. For broad incident RCA, DPDK/SR-IOV failures, or non-Multus pod symptoms, use `oke-troubleshooter` first.
+description: Deploy and troubleshoot multihome networking on OCI Kubernetes Engine using existing GVA secondary VNIC node pools, Multus thick plugin, OCI CNI/IPAM, NetworkAttachmentDefinitions, and test pods. Use when the user asks to auto-discover OKE cluster subnets or node pools for multihome, create OKE multihome pod manifests, configure Multus NADs for secondary VNIC interfaces, validate multihomed pod connectivity, inspect OCI CNI IPAM allocation on OKE nodes, or package repeatable OKE GVA multihome deployment steps. Do not use it to create or update GVA node pools. For broad incident RCA, DPDK/SR-IOV failures, or non-Multus pod symptoms, use `oke-troubleshooter` first.
 ---
 
 # OKE Multihome Deployer
