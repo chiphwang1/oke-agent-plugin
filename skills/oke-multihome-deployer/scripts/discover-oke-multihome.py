@@ -16,6 +16,33 @@ CLUSTER_OCID_RE = re.compile(r"ocid1\.cluster\.[^\s\"']+")
 SUBNET_OCID_RE = re.compile(r"ocid1\.subnet\.[^\s\"']+")
 
 
+def emit_error(exit_code: int, error_code: str, message: str, remediation: str, docs_url: str = "") -> int:
+    print(
+        json.dumps(
+            {
+                "error_code": error_code,
+                "message": message,
+                "remediation": remediation,
+                "docs_url": docs_url,
+            }
+        ),
+        file=sys.stderr,
+    )
+    return exit_code
+
+
+class JsonArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise SystemExit(
+            emit_error(
+                2,
+                "INVALID_ARGUMENT",
+                message,
+                "Run with --help to view usage.",
+            )
+        )
+
+
 def run_json(cmd: list[str], env: dict[str, str]) -> dict[str, Any]:
     result = subprocess.run(cmd, env=env, text=True, capture_output=True, check=False)
     if result.returncode != 0:
@@ -229,7 +256,7 @@ def suggested_generator_args(pools: list[dict[str, Any]]) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
+    parser = JsonArgumentParser(
         description="Discover OKE cluster node pools, placement subnets, and GVA secondary VNIC subnets."
     )
     parser.add_argument("--cluster-id")
@@ -254,7 +281,12 @@ def main() -> int:
         or cluster_id_from_name(args, env)
     )
     if not cluster_id:
-        raise SystemExit("Could not resolve cluster OCID. Pass --cluster-id or --cluster-name with --compartment-id.")
+        return emit_error(
+            1,
+            "CLUSTER_OCID_NOT_RESOLVED",
+            "Could not resolve cluster OCID.",
+            "Pass --cluster-id, or pass --cluster-name with --compartment-id, or use a kubeconfig context that contains --cluster-id.",
+        )
 
     cluster = get_cluster(args, cluster_id, env)
     if not args.region:
@@ -284,4 +316,25 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except BrokenPipeError:
+        raise SystemExit(1)
+    except RuntimeError as exc:
+        raise SystemExit(
+            emit_error(
+                1,
+                "DISCOVERY_COMMAND_FAILED",
+                str(exc),
+                "Verify OCI CLI authentication, region, compartment, and kubeconfig context, then rerun discovery.",
+            )
+        )
+    except Exception as exc:
+        raise SystemExit(
+            emit_error(
+                2,
+                "UNEXPECTED_ERROR",
+                str(exc),
+                "Inspect the input arguments and environment, then rerun discovery.",
+            )
+        )

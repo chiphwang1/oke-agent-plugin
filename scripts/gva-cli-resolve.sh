@@ -42,7 +42,6 @@ usage: gva-cli-resolve.sh [--json|--print-home|--print-activate|--print-wheel]
 Search order:
 1. $OKE_GVA_CLI_HOME
 2. <repo>/gva-cli
-3. /Users/chipinghwang/Desktop/projects/codex_oke_plugin/oke-agent-plugin/gva-cli
 EOF
       exit 0
       ;;
@@ -59,7 +58,6 @@ if [[ -n "${OKE_GVA_CLI_HOME:-}" ]]; then
 fi
 candidates+=(
   "$REPO_ROOT/gva-cli"
-  "/Users/chipinghwang/Desktop/projects/codex_oke_plugin/oke-agent-plugin/gva-cli"
 )
 
 resolved_home=""

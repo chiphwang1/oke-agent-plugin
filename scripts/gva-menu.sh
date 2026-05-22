@@ -6,6 +6,27 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 GVA_DISCOVER_SCRIPT="$SCRIPT_DIR/gva-discover.sh"
 
 say() { printf "%s\n" "$*"; }
+
+emit_error() {
+  local exit_code="$1"
+  local error_code="$2"
+  local message="$3"
+  local remediation="$4"
+  local docs_url="${5:-}"
+  python3 - "$error_code" "$message" "$remediation" "$docs_url" <<'PY' >&2
+import json
+import sys
+
+print(json.dumps({
+    "error_code": sys.argv[1],
+    "message": sys.argv[2],
+    "remediation": sys.argv[3],
+    "docs_url": sys.argv[4],
+}))
+PY
+  exit "$exit_code"
+}
+
 ask() {
   local prompt="$1" var
   read -r -p "$prompt" var
@@ -439,15 +460,21 @@ fi
 
 say ""
 say "CNI must be OCI_VCN_IP_NATIVE for GVA."
-select cni_ok in "Yes" "No"; do
+say "1) Yes"
+say "2) No"
+while true; do
+  say "Choose 1 or 2:"
+  IFS= read -r cni_ok
   case "$cni_ok" in
-    Yes) break ;;
-    No)
-      say "GVA is unsupported without OCI_VCN_IP_NATIVE. Exiting."
-      exit 1
+    1|Yes|yes|Y|y) break ;;
+    2|No|no|N|n)
+      emit_error 1 "GVA_REQUIRES_VCN_NATIVE_CNI" \
+        "GVA is unsupported without OCI_VCN_IP_NATIVE." \
+        "Use an OKE cluster with VCN-native pod networking before creating a GVA node pool."
       ;;
+    *) say "Choose one of the listed options." ;;
   esac
- done
+done
 
 # Collect VNIC profiles
 profiles=()

@@ -9,6 +9,33 @@ import sys
 from typing import Iterable
 
 
+def emit_error(exit_code: int, error_code: str, message: str, remediation: str, docs_url: str = "") -> int:
+    print(
+        json.dumps(
+            {
+                "error_code": error_code,
+                "message": message,
+                "remediation": remediation,
+                "docs_url": docs_url,
+            }
+        ),
+        file=sys.stderr,
+    )
+    return exit_code
+
+
+class JsonArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise SystemExit(
+            emit_error(
+                2,
+                "INVALID_ARGUMENT",
+                message,
+                "Run with --help to view usage.",
+            )
+        )
+
+
 def q(value: str) -> str:
     return json.dumps(value)
 
@@ -33,7 +60,7 @@ def emit(lines: Iterable[str]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
+    parser = JsonArgumentParser(
         description="Generate Multus NetworkAttachmentDefinitions and pinned test pods for OKE GVA multihome."
     )
     parser.add_argument("--namespace", default="gva-multihome-test")
@@ -146,4 +173,16 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except BrokenPipeError:
+        raise SystemExit(1)
+    except Exception as exc:
+        raise SystemExit(
+            emit_error(
+                2,
+                "UNEXPECTED_ERROR",
+                str(exc),
+                "Inspect the input arguments and rerun the manifest generator.",
+            )
+        )
