@@ -11,6 +11,9 @@ Use this skill after an OKE node pool already has GVA secondary VNIC profiles at
 
 If the user needs to create or update the node pool secondary VNIC profiles, use `oke-gva-deployer` first, then return here.
 
+Supporting references:
+- `validation-report-template.md` — standard final validation report structure.
+
 ## Core Workflow
 
 1. Confirm target cluster/context and auth.
@@ -37,6 +40,8 @@ If the user needs to create or update the node pool secondary VNIC profiles, use
    - Use fully qualified images such as `docker.io/nicolaka/netshoot:v0.13`; CRI-O may reject short image names.
    - Check pod annotation `k8s.v1.cni.cncf.io/network-status`.
    - Exec `ip -br addr` in each pod and ping the peer `net1` IP both directions.
+   - Use `validation-report-template.md` for the final validation report, whether
+     validation passed, failed, or remains incomplete.
 
 ## Discovery
 

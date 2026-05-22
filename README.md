@@ -85,7 +85,7 @@ tests do not need OCI or Kubernetes access.
 Start with the outcome you want:
 
 ```text
-Generate an OKE Terraform stack for us-ashburn-1 with private workers.
+Generate an OKE Terraform stack fast path for us-ashburn-1 with private workers.
 Troubleshoot why my OKE LoadBalancer service has no public IP.
 Create a GVA-enabled node pool for my current OKE cluster.
 Deploy Multus multi-home test pods on my GVA node pool and validate net1.
@@ -110,14 +110,20 @@ Use it when you want:
 - `schema.yaml` for OCI Resource Manager
 - Guided choices for cluster type, networking, node pools, storage, IAM, encryption,
   observability, GPU, RDMA/RoCE, and validation rules
+- A fast-path mode for a private, production-friendly starter stack with minimal
+  questions
 
 Example prompts:
 
 ```text
 /oke-agent-plugin:oke-cluster-generator
+/oke-agent-plugin:oke-cluster-generator fast-path us-ashburn-1 demo-private-oke
 /oke-agent-plugin:oke-cluster-generator ai/ml us-ashburn-1 prod-cluster
 /oke-agent-plugin:oke-cluster-generator hpc us-frankfurt-1
 ```
+
+Example: [successful transcript](examples/transcripts/oke-cluster-generator.md) and
+[sample Terraform output](examples/outputs/oke-cluster-generator/main.tf).
 
 ### Troubleshoot OKE Incidents
 
@@ -145,6 +151,9 @@ Example prompts:
 /oke-agent-plugin:oke-troubleshooter "private OKE API endpoint unreachable"
 ```
 
+Example: [successful transcript](examples/transcripts/oke-troubleshooter.md) and
+[sample troubleshooting report](examples/outputs/oke-troubleshooter/final-report.md).
+
 ### Configure GVA Node Pools
 
 `/oke-agent-plugin:oke-gva-deployer`
@@ -165,6 +174,9 @@ Example prompt:
 ```text
 /oke-agent-plugin:oke-gva-deployer
 ```
+
+Example: [successful transcript](examples/transcripts/oke-gva-deployer.md) and
+[sample GVA command output](examples/outputs/oke-gva-deployer/node-pool-command.sh).
 
 ### Validate Multus Multi-Home Pods
 
@@ -187,6 +199,9 @@ Example prompt:
 ```text
 /oke-agent-plugin:oke-multihome-deployer
 ```
+
+Example: [successful transcript](examples/transcripts/oke-multihome-deployer.md) and
+[sample Multus manifest](examples/outputs/oke-multihome-deployer/gva-multihome-pods.yaml).
 
 ## Requirements
 
@@ -258,6 +273,7 @@ oke-agent-plugin/
 |-- .claude-plugin/plugin.json       # Claude Code plugin manifest
 |-- AGENTS.md                        # Codex repository instructions
 |-- agents/                          # Optional Claude Code subagents
+|-- examples/                        # Successful transcripts and sample outputs
 |-- scripts/                         # Shared shell helpers
 |-- shared/                          # Shared OKE reference material
 |-- skills/

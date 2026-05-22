@@ -53,11 +53,62 @@ If `$ARGUMENTS` is empty, proceed with the full questionnaire.
 | Invocation | Effect |
 |------------|--------|
 | `/oke-cluster-generator` | Full questionnaire, no pre-fills |
+| `/oke-cluster-generator fast-path us-ashburn-1 demo-private-oke` | Fast path starter stack with region and name pre-filled |
 | `/oke-cluster-generator ai/ml` | WORKLOAD_TYPE = "AI / ML" pre-filled |
 | `/oke-cluster-generator hpc us-frankfurt-1` | WORKLOAD_TYPE = "HPC", TARGET_REGION pre-filled |
 | `/oke-cluster-generator general us-ashburn-1 prod-cluster` | All three pre-filled |
 
 ---
+
+## Fast Path Mode
+
+Use Fast Path Mode when the user says `fast path`, `quick start`, `starter stack`,
+`minimal questions`, or asks to generate a basic OKE Terraform stack quickly.
+
+Fast Path Mode creates a production-friendly starter design and asks only for values
+that cannot be safely inferred:
+
+Required inputs:
+- `TENANCY_OCID`
+- `COMPARTMENT_OCID`
+- `TARGET_REGION`
+- `CLUSTER_NAME`
+
+If any required value is missing after argument parsing and pre-flight discovery, ask
+for that value directly. Do not run the full 7-domain questionnaire unless the user asks
+to customize the design.
+
+Fast Path defaults:
+
+| Area | Default |
+| --- | --- |
+| Workload type | General Purpose |
+| Kubernetes version | Latest GA from OCI CLI, static fallback from `reference.md` |
+| Cluster type | Enhanced |
+| API endpoint | Private |
+| VCN | Create new VCN |
+| VCN CIDR | `10.0.0.0/16` |
+| Pod CIDR | `10.244.0.0/16` |
+| Service CIDR | `10.96.0.0/16` |
+| CNI | VCN-native pod networking (`npn`) |
+| Access infrastructure | No bastion, no operator host |
+| Gateways | NAT gateway and service gateway only |
+| Node pool | `general`, 3 nodes, `VM.Standard.E5.Flex`, 2 OCPUs, 16 GB |
+| Storage | Block Volume CSI enabled, FSS disabled |
+| Security | Create IAM policies, Oracle-managed encryption |
+| Workload Identity | Enabled |
+| Add-ons | CoreDNS and kube-proxy managed add-ons |
+| ORM audience | Expert |
+
+Fast Path workflow:
+1. Announce that Fast Path defaults are being used.
+2. Collect missing required inputs.
+3. Present a compact architecture summary table with every default listed above.
+4. Ask the user to confirm, revise, or switch to the full questionnaire.
+5. On confirmation, proceed directly to Phase 3 code generation using the same
+   reference and template rules as the full workflow.
+6. Mention `examples/transcripts/oke-cluster-generator.md` as an example of the
+   expected interaction and output.
 
 # OKE Cluster Generator
 

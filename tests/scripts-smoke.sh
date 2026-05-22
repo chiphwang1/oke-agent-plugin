@@ -23,6 +23,16 @@ assert_contains() {
   fi
 }
 
+assert_file_matches() {
+  local expected="$1"
+  local actual="$2"
+  local msg="$3"
+  if ! diff -u "$expected" "$actual"; then
+    echo "FAIL: $msg" >&2
+    exit 1
+  fi
+}
+
 assert_json_expr() {
   local json="$1"
   local expr="$2"
@@ -607,6 +617,40 @@ run_test_multihome_python_syntax() {
     "$REPO_ROOT/skills/oke-multihome-deployer/scripts/generate-multihome-manifest.py"
 }
 
+run_test_golden_outputs() {
+  echo "- golden outputs match Terraform, GVA, and Multus examples"
+  local generated_manifest
+  generated_manifest="$TMPDIR_BASE/gva-multihome-pods.yaml"
+
+  assert_file_matches \
+    "$REPO_ROOT/tests/golden/oke-cluster-main.tf" \
+    "$REPO_ROOT/examples/outputs/oke-cluster-generator/main.tf" \
+    "cluster generator Terraform example changed"
+
+  assert_file_matches \
+    "$REPO_ROOT/tests/golden/gva-node-pool-command.sh" \
+    "$REPO_ROOT/examples/outputs/oke-gva-deployer/node-pool-command.sh" \
+    "GVA command example changed"
+
+  python3 "$REPO_ROOT/skills/oke-multihome-deployer/scripts/generate-multihome-manifest.py" \
+    --namespace gva-multihome-test \
+    --default-interface enp1s0 \
+    --secondary-interface enp2s0 \
+    --pod gva-multihome-a=node-a \
+    --pod gva-multihome-b=node-b \
+    > "$generated_manifest"
+
+  assert_file_matches \
+    "$REPO_ROOT/tests/golden/gva-multihome-pods.yaml" \
+    "$generated_manifest" \
+    "generated Multus manifest changed"
+
+  assert_file_matches \
+    "$REPO_ROOT/tests/golden/gva-multihome-pods.yaml" \
+    "$REPO_ROOT/examples/outputs/oke-multihome-deployer/gva-multihome-pods.yaml" \
+    "Multus manifest example changed"
+}
+
 run_test_codex_metadata() {
   echo "- Codex metadata is present and valid"
   [[ -s "$REPO_ROOT/AGENTS.md" ]] || {
@@ -706,6 +750,7 @@ main() {
   run_test_troubleshooter_control_plane_recipe_uses_readyz
   run_test_multihome_manifest_generator
   run_test_multihome_python_syntax
+  run_test_golden_outputs
   run_test_codex_metadata
   run_test_oke_troubleshooter_helpers
   run_test_oke_deep_troubleshooter_helpers

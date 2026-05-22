@@ -18,6 +18,7 @@ Hard constraint:
 
 Supporting reference (load on demand):
 - `references/gva.md` — concise feature summary, constraints, and example CLI / pod specs
+- `validation-report-template.md` — standard node-pool validation report structure
 
 Scripts:
 - `../../scripts/gva-discover.sh` — discover cluster, subnets, and NSGs to minimize prompts
@@ -274,4 +275,7 @@ Deliverables should include:
 2. A finalized VNIC profile table
 3. A ready-to-run CLI command (or Terraform mapping notes)
 4. A sample workload manifest
-5. A verification checklist
+5. A verification checklist with pass/fail placeholders so the user can record node
+   resource validation after running `kubectl describe node <node_name>`
+6. A final validation report using `validation-report-template.md` when post-create
+   validation evidence is available

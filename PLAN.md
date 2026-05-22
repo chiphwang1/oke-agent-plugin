@@ -148,6 +148,8 @@ oke-agent-plugin/
 
 **Argument pre-fill:** if invoked with args (e.g., `/oke-cluster-generator ai/ml us-ashburn-1 prod-cluster`), parse workload type, region, and cluster name; skip corresponding Pre-flight/Phase 1 questions.
 
+**Fast path:** if invoked with "fast path", "quick start", or "starter stack", collect only required tenancy/compartment/region/name inputs and apply production-friendly defaults: Enhanced private cluster, VCN-native pod networking, new VCN, NAT + service gateway, one Flex node pool, Block Volume CSI, Workload Identity, and managed CoreDNS/kube-proxy.
+
 **Outputs:** Terraform bundle (`main.tf`, `variables.tf`, `outputs.tf`, `versions.tf`, `provider.tf`) + `schema.yaml` for ORM + preflight pass/fail report + required IAM policies.
 
 **Reference:** [terraform-oci-oke](https://github.com/oracle-terraform-modules/terraform-oci-oke) module; [oke-terraform-stack-builder](https://github.com/chiphwang1/oke-terraform-stack-builder) source implementation.
@@ -162,6 +164,7 @@ oke-agent-plugin/
 - `skills/oke-troubleshooter/SKILL.md` — 4-step orchestration with `context: fork`
 - `skills/oke-troubleshooter/symptom-triage.md` — decision table (e.g., "pods pending" → Scheduling + Node Health + Storage)
 - `skills/oke-troubleshooter/evidence-collectors.md` — domain recipes for Pod, Node, OKE add-ons, OCI CNI/IPAM, autoscaler, DNS, CNI, LB, Storage, IAM, Control Plane
+- `skills/oke-troubleshooter/final-report-template.md` — standard report shape for hypotheses, evidence, actions, prevention, and gaps
 - `agents/oke-evidence-collector.md` — Haiku subagent for parallel evidence (k8s layer + OCI layer simultaneously)
 - `agents/oke-hypothesis-analyst.md` — Sonnet subagent for scoring hypotheses 0–10 with evidence quotes
 - `shared/oci-resource-map.md` — Node→Instance, LoadBalancer Service→OCI LB, PV→Block Volume mappings
@@ -191,6 +194,7 @@ oke-agent-plugin/
 - `skills/oke-gva-deployer/SKILL.md` — phase-driven GVA workflow
 - `skills/oke-gva-deployer/USAGE.md` — quick-start and manual fallback
 - `skills/oke-gva-deployer/references/gva.md` — constraints and request/limit rules
+- `skills/oke-gva-deployer/validation-report-template.md` — standard node-pool validation report structure
 - `scripts/gva-discover.sh` and `scripts/gva-menu.sh` — helper automation
 
 **Reference:** OKE GVA documentation and OCI CLI node-pool operations.
@@ -203,6 +207,7 @@ oke-agent-plugin/
 
 **Key files:**
 - `skills/oke-multihome-deployer/SKILL.md` — post-GVA multihome workflow
+- `skills/oke-multihome-deployer/validation-report-template.md` — standard validation report structure
 - `skills/oke-multihome-deployer/scripts/discover-oke-multihome.py` — OCI/Kubernetes discovery helper
 - `skills/oke-multihome-deployer/scripts/generate-multihome-manifest.py` — NAD and pinned test pod manifest generator
 - `skills/oke-multihome-deployer/references/oke-multihome-notes.md` — known working pattern and troubleshooting notes
@@ -223,6 +228,12 @@ Loaded at `SessionStart` by `session-init.sh`. Keys: `default_compartment_ocid`,
 
 ### Error Contract
 All scripts: exit 0 (success), exit 1 (expected error), exit 2 (unexpected). Emit structured JSON to stderr: `{error_code, message, remediation, docs_url}`. Skills parse and format as user-facing error blocks.
+
+### Examples and Golden Outputs
+The `examples/` directory contains one successful transcript per skill plus sample
+outputs linked from the README. The smoke suite includes golden-output checks for
+the cluster-generator Terraform sample, GVA node-pool command sample, and generated
+Multus manifest.
 
 ### Security
 - No secrets printed or logged; credential fields redacted in audit log

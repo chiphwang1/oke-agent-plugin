@@ -54,12 +54,14 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
 ## Product Requirements
 ### Functional Requirements
 - Provide guided discovery for OKE cluster generation across networking, node pools, storage, security, and add-ons.
+- Provide a fast-path OKE cluster generation mode with production-friendly defaults for users who want a starter Terraform stack with minimal questions.
 - Generate Terraform and ORM artifacts:
   - `main.tf`, `variables.tf`, `outputs.tf`, `provider.tf`, `terraform.tfvars.example`, `schema.yaml`
 - Troubleshoot incidents using a symptom triage map that selects diagnostic domains.
 - Collect evidence using curated `kubectl` and `oci` command recipes.
 - Collect OKE-specific evidence for add-ons, OCI CNI/IPAM, Multus, autoscaler, DNS, ingress, OCIR, private endpoint, and workload identity issues.
 - Rank hypotheses with confidence scores and remediation commands.
+- Use standard final report templates for troubleshooting and multihome validation so outputs are predictable and shareable.
 - Generate GVA node-pool creation commands and validation manifests.
 - Generate Multus `NetworkAttachmentDefinition` resources and pinned test pods for GVA multi-home validation.
 
@@ -73,7 +75,7 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
 ## User Experience (High-Level)
 ### Cluster Generator
 1. Pre-flight: validate OCI CLI auth and discover tenancy/region/compartment.
-2. Discovery: 7-domain questionnaire.
+2. Discovery: either fast path defaults or the full 7-domain questionnaire.
 3. Architecture summary for confirmation.
 4. Artifact generation.
 5. Iteration loop to revise choices.
@@ -125,6 +127,7 @@ OKE operators lack a unified, guided AI workflow that covers both day-1 cluster 
 - Validate via manual scenarios:
   - ImagePullBackOff, LoadBalancer pending, PVC Pending, slow deployment, missing OCI CLI, healthy cluster.
 - Verify generated Terraform and ORM schema output for completeness.
+- Run golden-output tests for documented Terraform, GVA command, and Multus manifest examples.
 - Confirm GVA node pool creation command succeeds in a test environment.
 - Confirm multi-home test pods receive secondary interfaces and pass pod-to-pod `net1` connectivity checks.
 

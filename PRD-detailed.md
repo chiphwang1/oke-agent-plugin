@@ -46,6 +46,7 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 ### 6.1 Cluster Generator
 - Guided discovery across 7 domains:
   - Cluster fundamentals, networking, node pools, storage, security & access, add‑ons & observability, ORM schema preferences.
+- Fast-path mode for a starter OKE Terraform stack with production-friendly defaults and minimal required inputs.
 - Pre‑flight validation:
   - OCI CLI authenticated; tenancy, region, compartment discovery.
 - Generate artifacts:
@@ -59,6 +60,7 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 - Collect OKE-specific evidence for add-on health, OCI CNI/IPAM, Multus, cluster-autoscaler, DNS/service discovery, ingress, OCIR image pulls, private endpoint connectivity, and workload identity.
 - Invoke subagents to normalize evidence and rank hypotheses with confidence scores.
 - Output actionable remediation steps and prevention guidance.
+- Use a standard troubleshooting report template covering summary, hypotheses, evidence, actions, prevention, and evidence gaps.
 
 ### 6.3 LA Feature Deployer (GVA)
 - Auto‑discover cluster context from kubeconfig and OCI config.
@@ -80,6 +82,7 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 - Generate Multus `NetworkAttachmentDefinition` resources for default and secondary pod networks.
 - Generate pinned netshoot test pods with fully qualified images.
 - Validate pod `network-status`, `eth0` and `net1` interfaces, and pod-to-pod connectivity over the secondary interface.
+- Use a standard validation report template for generated artifacts, validation checks, results, and remediation.
 - Provide troubleshooting guidance for missing CNI binaries, OCI IPAM state, CRI-O short-name enforcement, and Multus pod sandbox failures.
 
 ## 7. Non‑Functional Requirements
@@ -99,7 +102,7 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 ## 8. User Flows
 ### 8.1 Cluster Generator Flow
 1. Pre‑flight checks.
-2. 7‑domain discovery Q&A.
+2. Fast-path defaults or 7‑domain discovery Q&A.
 3. Architecture summary and confirmation.
 4. Artifact generation.
 5. Iteration and regeneration as needed.
@@ -131,6 +134,7 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
 ## 10. Acceptance Criteria
 ### Cluster Generator
 - Generates complete Terraform + ORM artifacts from a single guided session.
+- Generates a starter stack through fast-path mode after collecting only required tenancy, compartment, region, and cluster-name inputs.
 - Produces a valid ORM schema that passes OCI validation.
 
 ### Troubleshooter
@@ -150,6 +154,10 @@ OKE lacks a unified AI workflow covering both provisioning and troubleshooting. 
   - Test pods schedule onto GVA-enabled nodes.
   - Pods expose `eth0` and `net1`.
   - Peer pods can ping over the `net1` addresses.
+
+### Documentation and Test Fixtures
+- `examples/` includes one successful transcript per skill and linked sample outputs.
+- Smoke tests include golden-output checks for the documented Terraform sample, GVA node-pool command, and generated Multus manifest.
 
 ## 11. Success Metrics
 - 50% reduction in time to produce initial Terraform/ORM assets.

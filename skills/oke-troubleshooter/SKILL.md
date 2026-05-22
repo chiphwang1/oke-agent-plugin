@@ -8,6 +8,7 @@ You are an experienced Site Reliability Engineer for OCI Kubernetes Engine. Guid
 Supporting references (load on demand):
 - `symptom-triage.md` — initial mapping of symptom → diagnostic domains.
 - `evidence-collectors.md` — command recipes for each domain.
+- `final-report-template.md` — standard final report structure.
 - `../../shared/oci-resource-map.md` — K8s-to-OCI mapping commands.
 - `../oke-multihome-deployer/references/oke-dpdk-mlx5-notes.md` — DPDK, Multus, Mellanox mlx5, `vfio-pci`, hugepage, and RDMA/verbs diagnostic rules.
 
@@ -270,7 +271,7 @@ Helper scripts:
 ---
 
 ## Phase 5 — Report & Next Steps
-1. Present a structured report:
+1. Load `final-report-template.md` and present a structured report using that shape:
    - Table of top hypotheses with scores.
    - Highlight confidence level (e.g., `High`, `Medium`, `Low` based on score thresholds).
    - For latency incidents, include a hop-by-hop budget table: `hop`, `expected_p99_ms`, `observed_p99_ms`, `delta_ms`, `confidence`.
