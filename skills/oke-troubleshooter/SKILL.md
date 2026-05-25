@@ -25,6 +25,7 @@ Helper scripts:
 - `../../scripts/oke-pod-network-check.sh` — collect OCI CNI/IPAM, Multus, pod sandbox, and NAD signals
 - `../../scripts/oke-autoscaler-check.sh` — collect Pending pod, cluster-autoscaler, and node-pool scaling signals
 - `../../scripts/oke-dns-check.sh` — collect CoreDNS, Service, EndpointSlice, and pod DNS lookup signals
+- `../../scripts/oke-service-lb-check.sh` — collect LoadBalancer Service, endpoint, event, LB/NLB, and NSG signals
 - `../../scripts/oke-ingress-check.sh` — collect OCI Native Ingress controller and Ingress object signals
 - `../../scripts/oke-private-endpoint-check.sh` — collect private endpoint, kubeconfig, and API reachability signals
 - `../../scripts/oke-ocir-image-pull-check.sh` — collect OCIR image pull, secret, service account, and repository signals
@@ -40,6 +41,7 @@ Helper scripts:
 - Use the optional agents above only as accelerators when the current runtime clearly supports agent delegation.
 - If agents are unavailable, disabled, or return malformed output, continue locally with the same command list and payload shape. Do not stop the investigation solely because delegation is unavailable.
 - Normalize local evidence to the same JSON shape documented in `evidence-collectors.md`.
+- Auto-run read-only evidence commands when tools are available, but never execute a remediation or any mutating command unless the user explicitly approves that exact command or action in the current session. Treat `kubectl apply`, `kubectl patch`, `kubectl annotate`, `kubectl delete`, `kubectl rollout restart`, scaling, node drains, OCI update/create/delete operations, and LB logging enablement as approval-required.
 
 ## Phase 0 — Input & Preflight
 1. **Parse Arguments**
@@ -173,7 +175,7 @@ Helper scripts:
    - Look up required commands in `evidence-collectors.md`.
    - Build command batches with placeholders filled (namespace, resource names, compartment OCID, time window, and dependency hop identifiers when present).
    - **Auto-run read-only evidence commands without prompting** when tools are available.
-   - Only ask for confirmation before **potentially disruptive** actions (restarts, scaling, drains).
+   - **Never auto-run remediation or mutating commands.** Present the exact command, explain the expected impact, and wait for explicit user approval before running it. Approval for one command does not imply approval for follow-up mutations.
    - Example command item:
      ```json
      {
@@ -305,7 +307,7 @@ Helper scripts:
    - Table of top hypotheses with scores.
    - Highlight confidence level (e.g., `High`, `Medium`, `Low` based on score thresholds).
    - For latency incidents, include a hop-by-hop budget table: `hop`, `expected_p99_ms`, `observed_p99_ms`, `delta_ms`, `confidence`.
-   - Remediation commands rendered in fenced code blocks, prefixed with comments where necessary.
+   - Remediation commands rendered in fenced code blocks, prefixed with comments where necessary. Do not execute them unless the user approves the exact command or action after seeing it.
    - Prevention recommendations as concise bullet points.
 2. Call out any limitations: missing tooling, commands that failed, domains not yet explored, and missing dependency telemetry.
 3. Offer next actions:

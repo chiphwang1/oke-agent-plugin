@@ -28,7 +28,7 @@ Confidence thresholds:
 
 ## Recommended Actions
 
-Provide commands in the order the operator should run them.
+Provide commands in the order the operator should run them. Do not execute remediation or mutating commands unless the user explicitly approves the exact command or action after seeing it.
 
 ```bash
 # Inspect the affected object first.

@@ -143,7 +143,8 @@ Use the graph to decide where to investigate next:
 
 - The default troubleshooting flow is read-only.
 - The skill may auto-run read-only evidence commands.
-- It must ask before potentially disruptive actions such as restarts, scaling, drains, or privileged node diagnostics.
+- It must ask before every remediation or mutating action, including `kubectl apply`, `kubectl patch`, `kubectl annotate`, `kubectl delete`, restarts, scaling, drains, privileged node diagnostics, OCI update/create/delete operations, and LB logging enablement.
+- Approval must be for the exact command or action shown in the current session. Approval for one command does not approve follow-up mutations.
 - Node Doctor diagnostics use `kubectl debug` and require explicit confirmation.
 
 ## Common Examples

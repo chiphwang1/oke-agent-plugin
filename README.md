@@ -137,6 +137,8 @@ It covers:
 - OKE add-ons: CoreDNS, OCI CNI, CSI, metrics, daemonsets, and deployments
 - Pod networking: OCI CNI/IPAM, Multus, NADs, pod sandboxes, and secondary interfaces
 - Load balancers, private endpoints, DNS, OCIR pulls, Workload Identity, and ingress
+- Focused `LoadBalancer` Service evidence: Service events, endpoints, endpoint slices,
+  OCI LB/NLB inventory, and NSG context
 - Autoscaler and node-pool scale-up failures
 - Storage, PVCs, CSI logs, and OCI limits
 - OCI object correlation for Pod-to-Node-to-Instance, Service/Ingress-to-LB,

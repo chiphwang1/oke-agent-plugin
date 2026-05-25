@@ -134,6 +134,9 @@ When a command fails, set `fallback_used` to `true`, capture stderr (sanitized),
 - **Normalization tips**: Distinguish Kubernetes scheduling constraints from autoscaler refusal. Flag max node pool size reached, no matching node group, shape capacity/limit errors, subnet IP exhaustion, taints/tolerations mismatch, and missing autoscaler deployment.
 
 ## Networking / CNI / Load Balancer
+- **Helper script**
+  - `bash ../../scripts/oke-service-lb-check.sh --namespace <ns> --service <service> --region <region> --compartment-id <compartment_ocid>`
+  - Use this first for `LoadBalancer` Services with missing or pending external IPs, unhealthy backend sets, subnet/security-rule errors, or annotation drift. It keeps Kubernetes Service events separate from OCI LB/NLB inventory so hypothesis ranking can tell provisioning failure from backend health failure.
 - **Kubernetes**
   - `kubectl get svc -n <ns> <service> -o yaml`
   - `kubectl get svc -n <ns> <service> -o jsonpath='{.status.loadBalancer.ingress[0].ip}'` (capture LB public IP when type is `LoadBalancer`)

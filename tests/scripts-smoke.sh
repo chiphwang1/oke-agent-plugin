@@ -177,6 +177,18 @@ if [[ "$cmd" == network\ nsg\ list* ]]; then
   exit 0
 fi
 
+if [[ "$cmd" == lb\ load-balancer\ list* ]]; then
+  cat <<'JSON'
+{"data":[{"display-name":"k8s-default-web","id":"ocid1.loadbalancer.oc1..lb","ip-addresses":[{"ip-address":"129.146.1.10"}],"lifecycle-state":"FAILED"}]}
+JSON
+  exit 0
+fi
+
+if [[ "$cmd" == nlb\ network-load-balancer\ list* ]]; then
+  echo '{"data":[]}'
+  exit 0
+fi
+
 echo "unexpected oci args: $*" >&2
 exit 9
 MOCK_OCI
@@ -335,7 +347,19 @@ if [[ "$*" == *"-n kube-system logs deployment/coredns --tail=200"* ]]; then
 fi
 
 if [[ "$*" == *"-n default get svc web -o yaml"* ]]; then
-  echo "kind: Service"
+  cat <<'OUT'
+kind: Service
+spec:
+  type: LoadBalancer
+status:
+  loadBalancer: {}
+OUT
+  exit 0
+fi
+
+if [[ "$*" == *"-n default describe service web"* ]]; then
+  echo "Warning SyncLoadBalancerFailed subnet exhausted"
+  echo "LoadBalancer Ingress: <pending>"
   exit 0
 fi
 
@@ -346,6 +370,11 @@ fi
 
 if [[ "$*" == *"-n default get endpointslices -l kubernetes.io/service-name=web -o yaml"* ]]; then
   echo "items: []"
+  exit 0
+fi
+
+if [[ "$*" == *"-n default get events --field-selector involvedObject.kind=Service,involvedObject.name=web"* ]]; then
+  echo "Warning SyncLoadBalancerFailed subnet exhausted"
   exit 0
 fi
 
@@ -445,11 +474,6 @@ fi
 if [[ "$*" == *"-n default rollout history deployment/web"* ]]; then
   echo "REVISION CHANGE-CAUSE"
   echo "2 kubectl set image"
-  exit 0
-fi
-
-if [[ "$*" == *"-n default describe service web"* ]]; then
-  echo "Warning Unhealthy backend"
   exit 0
 fi
 
@@ -652,6 +676,8 @@ run_test_troubleshooter_skill_has_local_fallback() {
   assert_contains "$body" "Default to **local execution in the parent skill**." "troubleshooter skill declares local execution default"
   assert_contains "$body" 'If delegation is available, you may hand the payload to `oke-evidence-collector`.' "troubleshooter skill treats evidence agent as optional"
   assert_contains "$body" "Otherwise rank hypotheses locally using this rubric:" "troubleshooter skill includes local ranking rubric"
+  assert_contains "$body" "never execute a remediation or any mutating command unless the user explicitly approves that exact command or action in the current session" "troubleshooter requires explicit approval before fixes"
+  assert_contains "$body" "**Never auto-run remediation or mutating commands.**" "troubleshooter blocks automatic fixes"
 }
 
 run_test_troubleshooter_control_plane_recipe_uses_readyz() {
@@ -794,6 +820,11 @@ run_test_oke_troubleshooter_helpers() {
   out="$("$REPO_ROOT/scripts/oke-autoscaler-check.sh" --namespace default --deployment web --cluster-id ocid1.cluster.oc1..abc --compartment-id ocid1.compartment.oc1..a --region us-ashburn-1)"
   assert_json_expr "$out" "obj['domain'] == 'Cluster Autoscaler / Node Pool Scaling'" "autoscaler helper domain"
   assert_json_expr "$out" "any('NotTriggerScaleUp' in item or 'max node group size' in item for item in obj['anomalies'])" "autoscaler helper surfaces scale-up issue"
+
+  out="$("$REPO_ROOT/scripts/oke-service-lb-check.sh" --namespace default --service web --compartment-id ocid1.compartment.oc1..a --region us-ashburn-1)"
+  assert_json_expr "$out" "obj['domain'] == 'Networking / CNI / Load Balancer'" "service LB helper domain"
+  assert_json_expr "$out" "obj['service_is_load_balancer'] is True" "service LB helper detects LoadBalancer type"
+  assert_json_expr "$out" "any('syncloadbalancerfailed' in item.lower() or 'pending' in item.lower() for item in obj['anomalies'])" "service LB helper surfaces provisioning issue"
 
   out="$("$REPO_ROOT/scripts/oke-dns-check.sh" --namespace default --service web --pod web-0 --lookup web.default.svc.cluster.local)"
   assert_json_expr "$out" "obj['domain'] == 'DNS / Service Discovery'" "dns helper domain"
