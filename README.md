@@ -93,16 +93,40 @@ tests do not need OCI or Kubernetes access.
 
 ## Good First Prompts
 
-Start with the outcome you want:
+Start with the outcome you want. These prompts work with Codex or Claude Code; use
+the slash-command form when your runtime supports plugin commands.
+
+Create infrastructure:
 
 ```text
-Generate an OKE Terraform stack fast path for us-ashburn-1 with private workers.
-Troubleshoot why my OKE LoadBalancer service has no public IP.
-Troubleshoot why my OKE LoadBalancer has an IP but no healthy endpoints.
-Troubleshoot why a pod was evicted for node DiskPressure and ask before Node Doctor.
-Create a GVA-enabled node pool for my current OKE cluster.
-Deploy Multus multi-home test pods on my GVA node pool and validate net1.
-Check an OKE workload that uses Multus, SR-IOV, hugepages, and DPDK.
+Use OKE Agent Plugin to generate a fast-path Terraform stack for a private OKE cluster in us-ashburn-1.
+Use OKE Agent Plugin to create an OCI Resource Manager schema for an OKE cluster with private workers and one flexible node pool.
+```
+
+Troubleshoot common incidents:
+
+```text
+Use OKE Agent Plugin to troubleshoot why my application in namespace payments has high latency.
+Use OKE Agent Plugin to troubleshoot intermittent timeouts for deployment checkout-api in namespace prod.
+Use OKE Agent Plugin to trace the request path for ingress payments-api and identify the likely bottleneck.
+Use OKE Agent Plugin to troubleshoot why service web in namespace default has no LoadBalancer IP.
+Use OKE Agent Plugin to troubleshoot why service web has an external IP but no healthy endpoints.
+Use OKE Agent Plugin to troubleshoot why pod trainer-0 was evicted for node DiskPressure. Include Node Health checks and ask before Node Doctor.
+Use OKE Agent Plugin to troubleshoot an OCIR ImagePullBackOff in namespace payments.
+```
+
+Deploy GVA and Multus:
+
+```text
+Use OKE Agent Plugin to create a GVA-enabled node pool for my current OKE cluster.
+Use OKE Agent Plugin to deploy Multus multi-home test pods on my GVA node pool and validate net1 connectivity.
+```
+
+Investigate advanced networking or accelerated workloads:
+
+```text
+Use OKE Agent Plugin to check an OKE workload that uses Multus, SR-IOV, hugepages, and DPDK.
+Use OKE Agent Plugin to diagnose a pod missing Mellanox mlx5, vfio-pci, RDMA devices, or expected network-status entries.
 ```
 
 The agent will ask follow-up questions when it needs cluster, region, compartment,
