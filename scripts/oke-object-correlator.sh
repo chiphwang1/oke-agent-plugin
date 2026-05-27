@@ -154,6 +154,11 @@ def parse_json(text):
 def ocid(value):
     return isinstance(value, str) and value.startswith("ocid1.")
 
+def provider_instance_id(obj):
+    provider_id = ((obj.get("spec") or {}).get("providerID") or "")
+    match = re.search(r"(ocid1\.instance\.[A-Za-z0-9_.-]+)", provider_id)
+    return match.group(1) if match else ""
+
 def lb_addresses(item):
     values = []
     for address in item.get("ip-addresses", []) or []:
@@ -200,6 +205,7 @@ for rec in records:
             annotations.get("node.oci.oraclecloud.com/instance-id")
             or annotations.get("oci.oraclecloud.com/instance-id")
             or annotations.get("oci.oraclecloud.com/instance_id")
+            or provider_instance_id(obj)
             or ""
         )
         if instance_id:
@@ -305,6 +311,7 @@ PY
 execute_plan "$tmp_dir/plan.json"
 python3 - "$records" "$namespace" "$cluster_id" "$compartment_id" "$region" "$pod" "$deployment" "$service" "$ingress" "$pvc" "$node" <<'PY' >"$tmp_dir/plan2.json"
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -322,6 +329,11 @@ def parse_json(text):
 def ann(obj, key):
     return (((obj or {}).get("metadata") or {}).get("annotations") or {}).get(key, "")
 
+def provider_instance_id(obj):
+    provider_id = ((obj.get("spec") or {}).get("providerID") or "")
+    match = re.search(r"(ocid1\.instance\.[A-Za-z0-9_.-]+)", provider_id)
+    return match.group(1) if match else ""
+
 derived = {"instance_id": "", "volume_id": "", "lb_ip": "", "lb_id": ""}
 existing = {(r["kind"], r["name"]) for r in records}
 plan = []
@@ -337,8 +349,13 @@ for rec in records:
             annotations.get("node.oci.oraclecloud.com/instance-id")
             or annotations.get("oci.oraclecloud.com/instance-id")
             or annotations.get("oci.oraclecloud.com/instance_id")
+            or provider_instance_id(data)
             or derived["instance_id"]
         )
+    elif rec["kind"] == "k8s_pvc" and isinstance(data, dict):
+        pv = ((data.get("spec") or {}).get("volumeName") or "")
+        if pv and ("k8s_pv", f"pv {pv}") not in existing:
+            plan.append({"name": f"pv {pv}", "kind": "k8s_pv", "cmd": ["kubectl", "get", "pv", pv, "-o", "json"]})
     elif rec["kind"] == "k8s_pv" and isinstance(data, dict):
         spec = data.get("spec") or {}
         derived["volume_id"] = (
@@ -393,6 +410,44 @@ if derived["lb_id"] and ("oci_lb", "load balancer") not in existing and ("oci_nl
 print(json.dumps(plan))
 PY
 execute_plan "$tmp_dir/plan2.json"
+
+python3 - "$records" "$compartment_id" <<'PY' >"$tmp_dir/plan3.json"
+import json
+import sys
+from pathlib import Path
+
+records = [json.loads(line) for line in Path(sys.argv[1]).read_text().splitlines() if line.strip()]
+compartment_id = sys.argv[2]
+existing = {(r["kind"], r["name"]) for r in records}
+plan = []
+
+def parse_json(text):
+    try:
+        return json.loads(text)
+    except Exception:
+        return None
+
+for rec in records:
+    if rec["kind"] != "k8s_pv":
+        continue
+    obj = parse_json(rec.get("output", ""))
+    if not isinstance(obj, dict):
+        continue
+    spec = obj.get("spec") or {}
+    volume_id = (
+        (spec.get("csi") or {}).get("volumeHandle")
+        or spec.get("ociVolumeID")
+        or spec.get("volumeID")
+        or ""
+    )
+    if volume_id and ("oci_volume", "block volume") not in existing:
+        plan.append({"name": "block volume", "kind": "oci_volume", "cmd": ["oci", "bv", "volume", "get", "--volume-id", volume_id, "--output", "json"]})
+    if volume_id and compartment_id and ("oci_volume_attachments", "volume attachments") not in existing:
+        plan.append({"name": "volume attachments", "kind": "oci_volume_attachments", "cmd": ["oci", "compute", "volume-attachment", "list", "--compartment-id", compartment_id, "--volume-id", volume_id, "--all", "--output", "json"]})
+
+print(json.dumps(plan))
+PY
+execute_plan "$tmp_dir/plan3.json"
 
 python3 - "$records" "$namespace" "$cluster_id" "$compartment_id" "$region" "$pod" "$deployment" "$service" "$ingress" "$pvc" "$node" <<'PY'
 import json
@@ -469,6 +524,11 @@ def oci_id(kind, ocid):
 def ocid(value):
     return isinstance(value, str) and value.startswith("ocid1.")
 
+def provider_instance_id(obj):
+    provider_id = ((obj.get("spec") or {}).get("providerID") or "")
+    match = re.search(r"(ocid1\.instance\.[A-Za-z0-9_.-]+)", provider_id)
+    return match.group(1) if match else ""
+
 def lb_addresses(item):
     values = []
     for address in item.get("ip-addresses", []) or []:
@@ -525,14 +585,18 @@ for rec in records:
         name = meta_name(obj_data) or derived["node"]
         node_id = k8s_id("node", name)
         annotations = ((obj_data.get("metadata") or {}).get("annotations") or {})
-        instance_id = annotations.get("node.oci.oraclecloud.com/instance-id") or annotations.get("oci.oraclecloud.com/instance-id") or annotations.get("oci.oraclecloud.com/instance_id") or ""
+        annotation_instance_id = annotations.get("node.oci.oraclecloud.com/instance-id") or annotations.get("oci.oraclecloud.com/instance-id") or annotations.get("oci.oraclecloud.com/instance_id") or ""
+        provider_instance = provider_instance_id(obj_data)
+        instance_id = annotation_instance_id or provider_instance
         pool = labels(obj_data).get("oke.oraclecloud.com/nodepool") or labels(obj_data).get("oci.oraclecloud.com/oke-nodepool")
-        add_node(node_id, "kubernetes.node", name, "kubectl", nodepool=pool)
+        add_node(node_id, "kubernetes.node", name, "kubectl", nodepool=pool, provider_id=(obj_data.get("spec") or {}).get("providerID"))
         if instance_id:
             derived["instance_id"] = instance_id
             inst_id = oci_id("instance", instance_id)
-            add_node(inst_id, "oci.compute.instance", instance_id, "kubectl node annotation")
-            add_edge(node_id, inst_id, "runs_on_instance", "node instance annotation")
+            source = "kubectl node annotation" if annotation_instance_id else "kubectl node providerID"
+            evidence = "node instance annotation" if annotation_instance_id else "node.spec.providerID"
+            add_node(inst_id, "oci.compute.instance", instance_id, source)
+            add_edge(node_id, inst_id, "runs_on_instance", evidence)
     elif kind == "k8s_deployment":
         name = meta_name(obj_data) or deployment_arg
         dep_id = k8s_id("deployment", name, namespace)
@@ -689,6 +753,8 @@ for rec in records:
             vol_id_raw = item.get("volume-id", derived["volume_id"])
             inst_id_raw = item.get("instance-id")
             if vol_id_raw and inst_id_raw:
+                add_node(oci_id("volume", vol_id_raw), "oci.blockvolume.volume", vol_id_raw, "oci volume attachment")
+                add_node(oci_id("instance", inst_id_raw), "oci.compute.instance", inst_id_raw, "oci volume attachment")
                 add_edge(oci_id("volume", vol_id_raw), oci_id("instance", inst_id_raw), "attached_to_instance", "volume attachment")
             if item.get("lifecycle-state") and item.get("lifecycle-state") != "ATTACHED":
                 anomalies.append(f"Volume attachment {item.get('id', '')} lifecycle-state is {item.get('lifecycle-state')}")

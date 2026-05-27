@@ -23,4 +23,5 @@ tmp/
 # Local scratch notes produced during agent sessions
 finalized-changelog.txt
 GVA_DEMO.md
+PROPOSAL.md
 agents/oke-repo-committer.md
