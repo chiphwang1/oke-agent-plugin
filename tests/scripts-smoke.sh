@@ -139,6 +139,34 @@ JSON
   exit 0
 fi
 
+if [[ "$cmd" == compute\ instance\ get* ]]; then
+  cat <<'JSON'
+{"data":{"id":"ocid1.instance.oc1..inst","lifecycle-state":"RUNNING","shape":"VM.Standard.E5.Flex","availability-domain":"GrCh:US-ASHBURN-AD-1"}}
+JSON
+  exit 0
+fi
+
+if [[ "$cmd" == compute\ vnic-attachment\ list* ]]; then
+  cat <<'JSON'
+{"data":[{"id":"ocid1.vnicattachment.oc1..va","vnic-id":"ocid1.vnic.oc1..vnic","subnet-id":"ocid1.subnet.oc1..node","lifecycle-state":"ATTACHED","display-name":"primary-vnic"}]}
+JSON
+  exit 0
+fi
+
+if [[ "$cmd" == bv\ volume\ get* ]]; then
+  cat <<'JSON'
+{"data":{"id":"ocid1.volume.oc1..vol","lifecycle-state":"AVAILABLE","availability-domain":"GrCh:US-ASHBURN-AD-1","size-in-gbs":50}}
+JSON
+  exit 0
+fi
+
+if [[ "$cmd" == compute\ volume-attachment\ list* ]]; then
+  cat <<'JSON'
+{"data":[{"id":"ocid1.volumeattachment.oc1..attach","volume-id":"ocid1.volume.oc1..vol","instance-id":"ocid1.instance.oc1..inst","lifecycle-state":"ATTACHED"}]}
+JSON
+  exit 0
+fi
+
 if [[ "$cmd" == monitoring\ alarm-status\ list-alarms-status* ]]; then
   cat <<'JSON'
 {"data":[{"display-name":"node-cpu-high","status":"FIRING","timestamp-triggered":"2026-04-29T20:00:00Z"}]}
@@ -278,6 +306,34 @@ fi
 
 if [[ "$*" == *"-n default get pod web-0 -o jsonpath={.spec.nodeName}"* || "$*" == *"-n default get pod web-0 -o jsonpath='{.spec.nodeName}'"* ]]; then
   echo "node-a"
+  exit 0
+fi
+
+if [[ "$*" == *"-n default get pod storage-pod -o json"* ]]; then
+  cat <<'JSON'
+{"metadata":{"name":"storage-pod","namespace":"default"},"spec":{"nodeName":"node-no-annotation","serviceAccountName":"default","volumes":[{"name":"data","persistentVolumeClaim":{"claimName":"data"}}]}}
+JSON
+  exit 0
+fi
+
+if [[ "$*" == *"-n default get pvc data -o json"* ]]; then
+  cat <<'JSON'
+{"metadata":{"name":"data","namespace":"default"},"spec":{"volumeName":"pv-data"},"status":{"phase":"Bound"}}
+JSON
+  exit 0
+fi
+
+if [[ "$*" == *"get pv pv-data -o json"* ]]; then
+  cat <<'JSON'
+{"metadata":{"name":"pv-data"},"spec":{"storageClassName":"oci-bv","csi":{"driver":"blockvolume.csi.oraclecloud.com","volumeHandle":"ocid1.volume.oc1..vol"}}}
+JSON
+  exit 0
+fi
+
+if [[ "$*" == *"get node node-no-annotation -o json"* ]]; then
+  cat <<'JSON'
+{"metadata":{"name":"node-no-annotation","labels":{"oke.oraclecloud.com/nodepool":"np-general"},"annotations":{}},"spec":{"providerID":"oci://ocid1.instance.oc1..inst"}}
+JSON
   exit 0
 fi
 
@@ -856,6 +912,27 @@ run_test_oke_deep_troubleshooter_helpers() {
   assert_json_expr "$out" "len(obj['timeline']) >= 1" "timeline helper emits events"
 }
 
+run_test_oke_object_correlator_storage_providerid() {
+  echo "- object correlator links storage and node placement via providerID"
+  local out
+
+  out="$("$REPO_ROOT/scripts/oke-object-correlator.sh" \
+    --namespace default \
+    --cluster-id ocid1.cluster.oc1..abc \
+    --compartment-id ocid1.compartment.oc1..a \
+    --region us-ashburn-1 \
+    --pod storage-pod)"
+
+  assert_json_expr "$out" "obj['fallback_used'] is False" "object correlator storage path has no fallback"
+  assert_json_expr "$out" "any(e['from'] == 'k8s:pod:default/storage-pod' and e['to'] == 'k8s:pvc:default/data' and e['relation'] == 'mounts_claim' for e in obj['graph']['edges'])" "pod mounts PVC edge"
+  assert_json_expr "$out" "any(e['from'] == 'k8s:pvc:default/data' and e['to'] == 'k8s:pv:pv-data' and e['relation'] == 'bound_to' for e in obj['graph']['edges'])" "PVC bound to PV edge"
+  assert_json_expr "$out" "any(e['from'] == 'k8s:pv:pv-data' and e['to'] == 'oci:volume:ocid1.volume.oc1..vol' and e['relation'] == 'backs_onto' for e in obj['graph']['edges'])" "PV backs block volume edge"
+  assert_json_expr "$out" "any(e['from'] == 'k8s:pod:default/storage-pod' and e['to'] == 'k8s:node:node-no-annotation' and e['relation'] == 'scheduled_on' for e in obj['graph']['edges'])" "pod scheduled on node edge"
+  assert_json_expr "$out" "any(e['from'] == 'k8s:node:node-no-annotation' and e['to'] == 'oci:instance:ocid1.instance.oc1..inst' and e['relation'] == 'runs_on_instance' and e.get('evidence') == 'node.spec.providerID' for e in obj['graph']['edges'])" "node providerID maps to OCI instance edge"
+  assert_json_expr "$out" "any(e['from'] == 'oci:volume:ocid1.volume.oc1..vol' and e['to'] == 'oci:instance:ocid1.instance.oc1..inst' and e['relation'] == 'attached_to_instance' for e in obj['graph']['edges'])" "volume attachment maps block volume to instance"
+  assert_json_expr "$out" "any(n['id'] == 'oci:instance:ocid1.instance.oc1..inst' and n['type'] == 'oci.compute.instance' for n in obj['graph']['oci'])" "OCI compute instance node exists"
+}
+
 main() {
   TMPDIR_BASE="$(mktemp -d)"
   if [[ "${KEEP_TMPDIR:-0}" == "1" ]]; then
@@ -889,6 +966,7 @@ main() {
   run_test_skill_consistency_text
   run_test_oke_troubleshooter_helpers
   run_test_oke_deep_troubleshooter_helpers
+  run_test_oke_object_correlator_storage_providerid
 
   echo "All smoke tests passed."
 }
